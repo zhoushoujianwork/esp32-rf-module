@@ -45,8 +45,8 @@ ESP32 RF 收发模块库，支持 315MHz 和 433MHz 双频段 RF 信号收发。
 
 ```yaml
 dependencies:
-  mikas/esp32-rf-module:
-    git: https://github.com/mikas/esp32-rf-module.git
+  zhoushoujianwork/esp32-rf-module:
+    git: https://github.com/zhoushoujianwork/esp32-rf-module.git
     version: ^1.0.0
 ```
 
@@ -54,7 +54,7 @@ dependencies:
 
 ```yaml
 dependencies:
-  mikas/esp32-rf-module: "^1.0.0"
+  zhoushoujianwork/esp32-rf-module: "^1.0.0"
 ```
 
 ## 使用方法

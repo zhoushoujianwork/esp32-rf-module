@@ -3,7 +3,7 @@
 ## Supports 315MHz and 433MHz RF signal transmission and reception
 
 description: "ESP32 RF Module Library for 315MHz and 433MHz signal transmission and reception"
-url: "https://github.com/mikas/esp32-rf-module"
+url: "https://github.com/zhoushoujianwork/esp32-rf-module"
 version: "1.0.0"
 
 ## Required IDF version
