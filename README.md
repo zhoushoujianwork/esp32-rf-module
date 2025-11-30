@@ -2,6 +2,8 @@
 
 ESP32 RF 收发模块库，支持 315MHz 和 433MHz 双频段 RF 信号收发。
 
+本库专为 [xiaozhi-esp32](https://github.com/78/xiaozhi-esp32) 项目设计，集成了 MCP（Model Context Protocol）工具功能，支持通过 AI 对话控制 RF 信号收发。
+
 ## 功能特性
 
 - ✅ 支持 315MHz 和 433MHz 双频段收发
@@ -91,11 +93,17 @@ rf_module.End();
 
 ### MCP 工具集成（可选）
 
-如果你的项目支持 MCP 协议，可以使用 `rf_mcp_tools.h` 注册 MCP 工具：
+本库专为 [xiaozhi-esp32](https://github.com/78/xiaozhi-esp32) 项目设计，集成了完整的 MCP（Model Context Protocol）工具功能。
+
+xiaozhi-esp32 是一个基于 MCP 协议的 AI 聊天机器人项目，支持通过语音对话控制各种 IoT 设备。本库的 MCP 工具集成使得用户可以通过自然语言与 AI 对话来控制 RF 信号收发。
+
+#### 在 xiaozhi-esp32 项目中使用
+
+如果你的项目基于 xiaozhi-esp32，可以使用 `rf_mcp_tools.h` 注册 MCP 工具：
 
 ```cpp
 #include "esp32_rf_module/mcp/rf_mcp_tools.h"
-#include "mcp_server.h"  // 需要你的项目提供 MCP Server
+#include "mcp_server.h"  // xiaozhi-esp32 项目提供
 
 // 在板子初始化时注册 MCP 工具
 void RegisterMcpTools() {
@@ -105,7 +113,27 @@ void RegisterMcpTools() {
 }
 ```
 
-**注意**：`rf_mcp_tools.h` 依赖你的项目中的 MCP Server 实现。如果你的项目不使用 MCP 协议，可以忽略此文件。
+注册后，AI 可以通过自然语言控制 RF 模块，例如：
+- "帮我发送一个433MHz信号，地址A1B2C3，按键01"
+- "复制一下这个遥控器的信号"
+- "列出所有保存的信号"
+- "发送第3个信号"
+
+#### MCP 工具列表
+
+本库提供以下 MCP 工具（通过 `RegisterRFMcpTools()` 注册）：
+
+1. **self.rf.send** - 发送 RF 信号
+2. **self.rf.receive** - 接收 RF 信号（阻塞等待）
+3. **self.rf.replay** - 重播最后接收的信号
+4. **self.rf.capture** - 捕捉模式
+5. **self.rf.list_signals** - 列出所有保存的信号
+6. **self.rf.send_by_index** - 按索引发送信号
+7. **self.rf.clear_signals** - 清理保存的信号
+8. **self.rf.get_status** - 获取模块状态
+9. **self.rf.set_config** - 配置模块参数
+
+**注意**：`rf_mcp_tools.h` 依赖 xiaozhi-esp32 项目中的 MCP Server 实现。如果你的项目不使用 MCP 协议，可以只使用核心功能（`rf_module.h`），忽略 MCP 工具文件。
 
 ## API 文档
 
@@ -213,6 +241,22 @@ esp32-rf-module/
 
 - **MCP 工具集成**（可选，需要 MCP Server）：
   - `include/esp32_rf_module/mcp/rf_mcp_tools.h`: MCP 工具注册函数，用于小智 AI 对话集成
+
+## 相关项目
+
+本库专为 [xiaozhi-esp32](https://github.com/78/xiaozhi-esp32) 项目设计。
+
+xiaozhi-esp32 是一个基于 MCP（Model Context Protocol）协议的 AI 聊天机器人项目，支持：
+- 离线语音唤醒（ESP-SR）
+- 流式 ASR + LLM + TTS 语音交互
+- 设备端 MCP 协议控制（扬声器、LED、舵机、GPIO、RF 等）
+- 云端 MCP 扩展大模型能力（智能家居控制、PC 桌面操作、知识搜索等）
+
+通过本库的 MCP 工具集成，xiaozhi-esp32 用户可以：
+- 通过自然语言与 AI 对话控制 RF 信号收发
+- 复制/克隆遥控器信号
+- 管理保存的 RF 信号
+- 通过语音指令发送 RF 信号
 
 ## 许可证
 

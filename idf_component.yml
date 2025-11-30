@@ -2,7 +2,7 @@
 ## ESP32 RF Module Library
 ## Supports 315MHz and 433MHz RF signal transmission and reception
 
-description: "ESP32 RF Module Library for 315MHz and 433MHz signal transmission and reception"
+description: "ESP32 RF Module Library for 315MHz and 433MHz signal transmission and reception. Designed for xiaozhi-esp32 project with MCP tools integration for AI voice control."
 url: "https://github.com/zhoushoujianwork/esp32-rf-module"
 version: "1.0.0"
 
