@@ -7,6 +7,7 @@ idf_component_register(
         "include"
     REQUIRES 
         nvs_flash
+        esp_driver_gpio
     KCONFIG 
         "Kconfig"
 )
