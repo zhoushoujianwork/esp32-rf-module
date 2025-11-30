@@ -1,4 +1,4 @@
-#include "esp32_rf_module/rcswitch.h"
+#include "rcswitch.h"
 #include <esp_log.h>
 #include <driver/gpio.h>
 #include <freertos/FreeRTOS.h>

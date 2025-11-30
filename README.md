@@ -64,7 +64,7 @@ dependencies:
 ### 基本使用
 
 ```cpp
-#include "esp32_rf_module/rf_module.h"
+#include "rf_module.h"
 
 // 初始化 RF 模块
 RFModule rf_module(
@@ -102,7 +102,7 @@ xiaozhi-esp32 是一个基于 MCP 协议的 AI 聊天机器人项目，支持通
 如果你的项目基于 xiaozhi-esp32，可以使用 `rf_mcp_tools.h` 注册 MCP 工具：
 
 ```cpp
-#include "esp32_rf_module/mcp/rf_mcp_tools.h"
+#include "rf_mcp_tools.h"
 #include "mcp_server.h"  // xiaozhi-esp32 项目提供
 
 // 在板子初始化时注册 MCP 工具
@@ -219,14 +219,12 @@ esp32-rf-module/
 ├── idf_component.yml           # Component Manager 清单文件
 ├── README.md                   # 库文档
 ├── LICENSE                     # MIT 许可证
-├── include/
-│   └── esp32_rf_module/        # 公共头文件目录
-│       ├── rf_module.h         # RF 模块核心类
-│       ├── rcswitch.h          # 433MHz 协议处理
-│       ├── tcswitch.h          # 315MHz 协议处理
-│       └── mcp/                # MCP 工具集成（可选）
-│           └── rf_mcp_tools.h  # MCP 工具注册函数
-└── src/                        # 源文件目录
+├── include/                    # 公共头文件目录
+│   ├── rf_module.h            # RF 模块核心类
+│   ├── rcswitch.h             # 433MHz 协议处理
+│   ├── tcswitch.h             # 315MHz 协议处理
+│   └── rf_mcp_tools.h         # MCP 工具注册函数（可选）
+└── src/                       # 源文件目录
     ├── rf_module.cc
     ├── rcswitch.cc
     └── tcswitch.cc
@@ -235,12 +233,12 @@ esp32-rf-module/
 ## 文件说明
 
 - **核心功能**（必需）：
-  - `include/esp32_rf_module/rf_module.h` + `src/rf_module.cc`: RF 模块核心类
-  - `include/esp32_rf_module/rcswitch.h` + `src/rcswitch.cc`: 433MHz 协议处理
-  - `include/esp32_rf_module/tcswitch.h` + `src/tcswitch.cc`: 315MHz 协议处理
+  - `include/rf_module.h` + `src/rf_module.cc`: RF 模块核心类
+  - `include/rcswitch.h` + `src/rcswitch.cc`: 433MHz 协议处理
+  - `include/tcswitch.h` + `src/tcswitch.cc`: 315MHz 协议处理
 
 - **MCP 工具集成**（可选，需要 MCP Server）：
-  - `include/esp32_rf_module/mcp/rf_mcp_tools.h`: MCP 工具注册函数，用于小智 AI 对话集成
+  - `include/rf_mcp_tools.h`: MCP 工具注册函数，用于小智 AI 对话集成
 
 ## 相关项目
 

@@ -1,6 +1,6 @@
-#include "esp32_rf_module/rf_module.h"
-#include "esp32_rf_module/rcswitch.h"
-#include "esp32_rf_module/tcswitch.h"
+#include "rf_module.h"
+#include "rcswitch.h"
+#include "tcswitch.h"
 #include <esp_log.h>
 #include <driver/gpio.h>
 #include <esp_timer.h>
