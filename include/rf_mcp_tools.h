@@ -738,22 +738,22 @@ inline void RegisterRFMcpTools(RFModule* rf_module) {
                                  (signal.frequency == RF_315MHZ ? "315" : "433") + "MHz)";
                 }
                 
-                if (rf_module->ClearFlashSignal(internal_index)) {
-                    uint8_t remaining_count = rf_module->GetFlashSignalCount();
-                    ESP_LOGI(TAG_RF_MCP, "[清理] 已清除信号索引 %d%s (剩余%d个信号)", 
-                            user_index, 
-                            signal_info.empty() ? "" : (" " + signal_info).c_str(),
-                            remaining_count);
-                    
-                    cJSON* json = cJSON_CreateObject();
-                    cJSON_AddNumberToObject(json, "cleared_count", 1);
-                    cJSON_AddNumberToObject(json, "remaining_count", remaining_count);
-                    cJSON_AddNumberToObject(json, "cleared_index", user_index);
-                    cJSON_AddStringToObject(json, "action", "clear_by_index");
-                    return json;
-                } else {
+                if (!rf_module->ClearFlashSignal(internal_index)) {
                     throw std::runtime_error("Failed to clear signal at index " + std::to_string(user_index));
                 }
+                
+                uint8_t remaining_count = rf_module->GetFlashSignalCount();
+                ESP_LOGI(TAG_RF_MCP, "[清理] 已清除信号索引 %d%s (剩余%d个信号)", 
+                        user_index, 
+                        signal_info.empty() ? "" : (" " + signal_info).c_str(),
+                        remaining_count);
+                
+                cJSON* json = cJSON_CreateObject();
+                cJSON_AddNumberToObject(json, "cleared_count", 1);
+                cJSON_AddNumberToObject(json, "remaining_count", remaining_count);
+                cJSON_AddNumberToObject(json, "cleared_index", user_index);
+                cJSON_AddStringToObject(json, "action", "clear_by_index");
+                return json;
             }
         });
 

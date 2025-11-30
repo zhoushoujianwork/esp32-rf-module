@@ -16,38 +16,6 @@ if(NOT DEFINED RF_MODULE_LOG_LEVEL)
     set(RF_MODULE_LOG_LEVEL 3)
 endif()
 
-# Set compile definitions based on CMake options
-# These will override defaults in rf_module_config.h
-# Note: add_compile_definitions() applies to all targets in this directory
-if(RF_MODULE_ENABLE_FLASH_STORAGE)
-    add_compile_definitions(CONFIG_RF_MODULE_ENABLE_FLASH_STORAGE=1)
-else()
-    add_compile_definitions(CONFIG_RF_MODULE_ENABLE_FLASH_STORAGE=0)
-endif()
-
-if(RF_MODULE_ENABLE_433MHZ)
-    add_compile_definitions(CONFIG_RF_MODULE_ENABLE_433MHZ=1)
-else()
-    add_compile_definitions(CONFIG_RF_MODULE_ENABLE_433MHZ=0)
-endif()
-
-if(RF_MODULE_ENABLE_315MHZ)
-    add_compile_definitions(CONFIG_RF_MODULE_ENABLE_315MHZ=1)
-else()
-    add_compile_definitions(CONFIG_RF_MODULE_ENABLE_315MHZ=0)
-endif()
-
-if(RF_MODULE_ENABLE_MCP_TOOLS)
-    add_compile_definitions(CONFIG_RF_MODULE_ENABLE_MCP_TOOLS=1)
-else()
-    add_compile_definitions(CONFIG_RF_MODULE_ENABLE_MCP_TOOLS=0)
-endif()
-
-add_compile_definitions(
-    CONFIG_RF_MODULE_MAX_FLASH_SIGNALS=${RF_MODULE_MAX_FLASH_SIGNALS}
-    CONFIG_RF_MODULE_LOG_LEVEL=${RF_MODULE_LOG_LEVEL}
-)
-
 idf_component_register(
     SRCS 
         "src/rf_module.cc"
@@ -58,5 +26,37 @@ idf_component_register(
     REQUIRES 
         nvs_flash
         esp_driver_gpio
+)
+
+# Set compile definitions based on CMake options
+# These will override defaults in rf_module_config.h
+# Use target_compile_definitions after component registration
+if(RF_MODULE_ENABLE_FLASH_STORAGE)
+    target_compile_definitions(${COMPONENT_LIB} PRIVATE CONFIG_RF_MODULE_ENABLE_FLASH_STORAGE=1)
+else()
+    target_compile_definitions(${COMPONENT_LIB} PRIVATE CONFIG_RF_MODULE_ENABLE_FLASH_STORAGE=0)
+endif()
+
+if(RF_MODULE_ENABLE_433MHZ)
+    target_compile_definitions(${COMPONENT_LIB} PRIVATE CONFIG_RF_MODULE_ENABLE_433MHZ=1)
+else()
+    target_compile_definitions(${COMPONENT_LIB} PRIVATE CONFIG_RF_MODULE_ENABLE_433MHZ=0)
+endif()
+
+if(RF_MODULE_ENABLE_315MHZ)
+    target_compile_definitions(${COMPONENT_LIB} PRIVATE CONFIG_RF_MODULE_ENABLE_315MHZ=1)
+else()
+    target_compile_definitions(${COMPONENT_LIB} PRIVATE CONFIG_RF_MODULE_ENABLE_315MHZ=0)
+endif()
+
+if(RF_MODULE_ENABLE_MCP_TOOLS)
+    target_compile_definitions(${COMPONENT_LIB} PRIVATE CONFIG_RF_MODULE_ENABLE_MCP_TOOLS=1)
+else()
+    target_compile_definitions(${COMPONENT_LIB} PRIVATE CONFIG_RF_MODULE_ENABLE_MCP_TOOLS=0)
+endif()
+
+target_compile_definitions(${COMPONENT_LIB} PRIVATE 
+    CONFIG_RF_MODULE_MAX_FLASH_SIGNALS=${RF_MODULE_MAX_FLASH_SIGNALS}
+    CONFIG_RF_MODULE_LOG_LEVEL=${RF_MODULE_LOG_LEVEL}
 )
 
