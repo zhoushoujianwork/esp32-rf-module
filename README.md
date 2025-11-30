@@ -61,9 +61,113 @@ dependencies:
 
 ## 配置
 
-本库支持通过 ESP-IDF 的 Kconfig 系统进行功能配置。运行 `idf.py menuconfig`，进入 `Component config` → `ESP32 RF Module Configuration` 进行配置。
+本库支持通过主项目的 Kconfig 系统进行功能配置。配置方式如下：
 
-### 配置选项
+### 在主项目中配置
+
+**快速开始**：可以参考本库提供的示例文件：
+- `Kconfig.projbuild.example` - Kconfig 配置示例
+- `CMakeLists.example.txt` - CMakeLists.txt 配置示例
+
+在主项目的 `Kconfig.projbuild` 文件中添加以下配置：
+
+```kconfig
+menu "ESP32 RF Module Configuration"
+
+    config RF_MODULE_ENABLE_FLASH_STORAGE
+        bool "Enable Flash Storage (NVS)"
+        default y
+        help
+            Enable NVS flash storage for signal persistence.
+            When enabled, received signals are automatically saved to flash.
+            Requires nvs_flash component.
+
+    config RF_MODULE_MAX_FLASH_SIGNALS
+        int "Maximum Flash Storage Signals"
+        range 1 20
+        default 10
+        depends on RF_MODULE_ENABLE_FLASH_STORAGE
+        help
+            Maximum number of signals to store in flash storage.
+            Uses circular buffer, oldest signals are overwritten when full.
+
+    config RF_MODULE_ENABLE_433MHZ
+        bool "Enable 433MHz Frequency Support"
+        default y
+        help
+            Enable support for 433MHz RF signals.
+            Requires RCSwitch component.
+
+    config RF_MODULE_ENABLE_315MHZ
+        bool "Enable 315MHz Frequency Support"
+        default y
+        help
+            Enable support for 315MHz RF signals.
+            Requires TCSwitch component.
+
+    config RF_MODULE_ENABLE_MCP_TOOLS
+        bool "Enable MCP Tools"
+        default y
+        depends on RF_MODULE_ENABLE_FLASH_STORAGE
+        help
+            Enable MCP (Model Context Protocol) tools integration.
+            Provides self.rf.* tools for AI-driven device control.
+            Requires mcp_server component from the main project.
+
+    config RF_MODULE_LOG_LEVEL
+        int "Log Level"
+        range 0 5
+        default 3
+        help
+            Set the log level for RF module:
+            0 = None
+            1 = Error
+            2 = Warning
+            3 = Info
+            4 = Debug
+            5 = Verbose
+
+endmenu
+```
+
+然后在主项目的 `CMakeLists.txt` 中添加配置转换逻辑：
+
+```cmake
+# RF Module Configuration (from Kconfig to CMake)
+if(CONFIG_RF_MODULE_ENABLE_FLASH_STORAGE)
+    set(RF_MODULE_ENABLE_FLASH_STORAGE ON)
+else()
+    set(RF_MODULE_ENABLE_FLASH_STORAGE OFF)
+endif()
+
+if(CONFIG_RF_MODULE_ENABLE_433MHZ)
+    set(RF_MODULE_ENABLE_433MHZ ON)
+else()
+    set(RF_MODULE_ENABLE_433MHZ OFF)
+endif()
+
+if(CONFIG_RF_MODULE_ENABLE_315MHZ)
+    set(RF_MODULE_ENABLE_315MHZ ON)
+else()
+    set(RF_MODULE_ENABLE_315MHZ OFF)
+endif()
+
+if(CONFIG_RF_MODULE_ENABLE_MCP_TOOLS)
+    set(RF_MODULE_ENABLE_MCP_TOOLS ON)
+else()
+    set(RF_MODULE_ENABLE_MCP_TOOLS OFF)
+endif()
+
+if(DEFINED CONFIG_RF_MODULE_MAX_FLASH_SIGNALS)
+    set(RF_MODULE_MAX_FLASH_SIGNALS ${CONFIG_RF_MODULE_MAX_FLASH_SIGNALS})
+endif()
+
+if(DEFINED CONFIG_RF_MODULE_LOG_LEVEL)
+    set(RF_MODULE_LOG_LEVEL ${CONFIG_RF_MODULE_LOG_LEVEL})
+endif()
+```
+
+### 配置选项说明
 
 - **Enable Flash Storage (NVS)** (`RF_MODULE_ENABLE_FLASH_STORAGE`)
   - 默认：启用
@@ -94,10 +198,12 @@ dependencies:
 
 ### 配置示例
 
+运行 `idf.py menuconfig`，进入主项目的配置菜单，找到 `ESP32 RF Module Configuration` 进行配置。
+
 如果只需要 433MHz 支持，可以禁用 315MHz：
 
 ```
-Component config → ESP32 RF Module Configuration
+ESP32 RF Module Configuration
   [*] Enable Flash Storage (NVS)
   [*] Enable 433MHz Frequency Support
   [ ] Enable 315MHz Frequency Support
@@ -107,12 +213,15 @@ Component config → ESP32 RF Module Configuration
 如果不需要 MCP 工具，可以禁用：
 
 ```
-Component config → ESP32 RF Module Configuration
+ESP32 RF Module Configuration
   [*] Enable Flash Storage (NVS)
   [ ] Enable MCP Tools
 ```
 
-**注意**：禁用功能后，相关代码会被条件编译排除，减少代码体积。
+**注意**：
+- 禁用功能后，相关代码会被条件编译排除，减少代码体积
+- 所有配置项都有默认值，保持向后兼容性
+- 如果主项目未配置 Kconfig，组件将使用默认配置（所有功能启用）
 
 ## 使用方法
 
@@ -274,7 +383,10 @@ esp32-rf-module/
 ├── idf_component.yml           # Component Manager 清单文件
 ├── README.md                   # 库文档
 ├── LICENSE                     # MIT 许可证
+├── Kconfig.projbuild.example   # 主项目 Kconfig 配置示例
+├── CMakeLists.example.txt      # 主项目 CMakeLists.txt 配置示例
 ├── include/                    # 公共头文件目录
+│   ├── rf_module_config.h      # 配置头文件（默认值）
 │   ├── rf_module.h            # RF 模块核心类
 │   ├── rcswitch.h             # 433MHz 协议处理
 │   ├── tcswitch.h             # 315MHz 协议处理
@@ -323,6 +435,13 @@ Copyright (c) 2025 Project Contributors
 欢迎提交 Issue 和 Pull Request！
 
 ## 更新日志
+
+### v1.1.0
+- **重大变更**：移除组件内部的 Kconfig 配置，改为通过主项目的 Kconfig.projbuild 配置
+- 解决组件库 Kconfig 导致的构建问题
+- 添加 `rf_module_config.h` 配置头文件，提供默认值
+- 添加配置示例文件（`Kconfig.projbuild.example` 和 `CMakeLists.example.txt`）
+- 保持向后兼容性，所有功能默认启用
 
 ### v1.0.0
 - 初始版本

@@ -1,8 +1,10 @@
 #ifndef RF_MCP_TOOLS_H
 #define RF_MCP_TOOLS_H
 
+#include "rf_module_config.h"
+
 #if !CONFIG_RF_MODULE_ENABLE_MCP_TOOLS
-#error "MCP Tools are disabled. Enable CONFIG_RF_MODULE_ENABLE_MCP_TOOLS in menuconfig."
+#error "MCP Tools are disabled. Set RF_MODULE_ENABLE_MCP_TOOLS=ON in CMake or enable CONFIG_RF_MODULE_ENABLE_MCP_TOOLS in the main project's Kconfig."
 #endif
 
 #include "mcp_server.h"

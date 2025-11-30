@@ -1,0 +1,37 @@
+# Example CMakeLists.txt configuration for main project
+# Add this code to your main project's CMakeLists.txt (before idf_component_register)
+# to convert Kconfig values to CMake variables for RF Module component
+
+# RF Module Configuration (from Kconfig to CMake)
+if(CONFIG_RF_MODULE_ENABLE_FLASH_STORAGE)
+    set(RF_MODULE_ENABLE_FLASH_STORAGE ON)
+else()
+    set(RF_MODULE_ENABLE_FLASH_STORAGE OFF)
+endif()
+
+if(CONFIG_RF_MODULE_ENABLE_433MHZ)
+    set(RF_MODULE_ENABLE_433MHZ ON)
+else()
+    set(RF_MODULE_ENABLE_433MHZ OFF)
+endif()
+
+if(CONFIG_RF_MODULE_ENABLE_315MHZ)
+    set(RF_MODULE_ENABLE_315MHZ ON)
+else()
+    set(RF_MODULE_ENABLE_315MHZ OFF)
+endif()
+
+if(CONFIG_RF_MODULE_ENABLE_MCP_TOOLS)
+    set(RF_MODULE_ENABLE_MCP_TOOLS ON)
+else()
+    set(RF_MODULE_ENABLE_MCP_TOOLS OFF)
+endif()
+
+if(DEFINED CONFIG_RF_MODULE_MAX_FLASH_SIGNALS)
+    set(RF_MODULE_MAX_FLASH_SIGNALS ${CONFIG_RF_MODULE_MAX_FLASH_SIGNALS})
+endif()
+
+if(DEFINED CONFIG_RF_MODULE_LOG_LEVEL)
+    set(RF_MODULE_LOG_LEVEL ${CONFIG_RF_MODULE_LOG_LEVEL})
+endif()
+

@@ -1,3 +1,7 @@
+# Example Kconfig.projbuild for main project
+# Copy this content to your main project's Kconfig.projbuild file
+# to enable RF Module configuration via menuconfig
+
 menu "ESP32 RF Module Configuration"
 
     config RF_MODULE_ENABLE_FLASH_STORAGE
