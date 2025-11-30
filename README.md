@@ -436,14 +436,14 @@ Copyright (c) 2025 Project Contributors
 
 ## 更新日志
 
-### v1.1.0
+### v0.1.4
 - **重大变更**：移除组件内部的 Kconfig 配置，改为通过主项目的 Kconfig.projbuild 配置
 - 解决组件库 Kconfig 导致的构建问题
 - 添加 `rf_module_config.h` 配置头文件，提供默认值
 - 添加配置示例文件（`Kconfig.projbuild.example` 和 `CMakeLists.example.txt`）
 - 保持向后兼容性，所有功能默认启用
 
-### v1.0.0
+### v0.1.3
 - 初始版本
 - 支持 315MHz 和 433MHz 双频段收发
 - 支持信号捕获和重放
