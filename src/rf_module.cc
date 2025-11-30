@@ -49,13 +49,10 @@ void RFModule::Begin() {
         return;
     }
     
+#if CONFIG_RF_MODULE_ENABLE_433MHZ
     // Initialize 433MHz TX pin
     gpio_set_direction(tx433_pin_, GPIO_MODE_OUTPUT);
     gpio_set_level(tx433_pin_, 0);
-    
-    // Initialize 315MHz TX pin
-    gpio_set_direction(tx315_pin_, GPIO_MODE_OUTPUT);
-    gpio_set_level(tx315_pin_, 0);
     
     // Initialize RCSwitch (433MHz)
     if (rc_switch_ == nullptr) {
@@ -69,6 +66,12 @@ void RFModule::Begin() {
             rc_switch_->enableReceive(static_cast<int>(rx433_pin_));
         }
     }
+#endif // CONFIG_RF_MODULE_ENABLE_433MHZ
+    
+#if CONFIG_RF_MODULE_ENABLE_315MHZ
+    // Initialize 315MHz TX pin
+    gpio_set_direction(tx315_pin_, GPIO_MODE_OUTPUT);
+    gpio_set_level(tx315_pin_, 0);
     
     // Initialize TCSwitch (315MHz)
     if (tc_switch_ == nullptr) {
@@ -82,10 +85,12 @@ void RFModule::Begin() {
             tc_switch_->enableReceive(static_cast<int>(rx315_pin_));
         }
     }
+#endif // CONFIG_RF_MODULE_ENABLE_315MHZ
     
     enabled_ = true;
     ResetCounters();
     
+#if CONFIG_RF_MODULE_ENABLE_FLASH_STORAGE
     // Enable flash storage and load saved signal
     EnableFlashStorage("rf_replay");
     ESP_LOGI(TAG, "[闪存] Flash storage enabled: enabled=%d, handle=%lu", 
@@ -93,6 +98,7 @@ void RFModule::Begin() {
     LoadFromFlash();  // Load the last saved signal
     ESP_LOGI(TAG, "[闪存] After LoadFromFlash: count=%d, has_signal=%d", 
             flash_signal_count_, has_captured_signal_);
+#endif // CONFIG_RF_MODULE_ENABLE_FLASH_STORAGE
     
     ESP_LOGI(TAG, "RF module initialized: TX433=%d, RX433=%d, TX315=%d, RX315=%d",
              tx433_pin_, rx433_pin_, tx315_pin_, rx315_pin_);
@@ -103,24 +109,28 @@ void RFModule::End() {
         return;
     }
     
+#if CONFIG_RF_MODULE_ENABLE_433MHZ
     if (rc_switch_ != nullptr) {
         rc_switch_->disableReceive();
         delete rc_switch_;
         rc_switch_ = nullptr;
     }
+#endif // CONFIG_RF_MODULE_ENABLE_433MHZ
     
+#if CONFIG_RF_MODULE_ENABLE_315MHZ
     if (tc_switch_ != nullptr) {
         tc_switch_->disableReceive();
         delete tc_switch_;
         tc_switch_ = nullptr;
     }
+#endif // CONFIG_RF_MODULE_ENABLE_315MHZ
     
     // Cleanup replay buffer
     DisableReplayBuffer();
     
-    #ifdef ESP32
+#if CONFIG_RF_MODULE_ENABLE_FLASH_STORAGE
     DisableFlashStorage();
-    #endif
+#endif // CONFIG_RF_MODULE_ENABLE_FLASH_STORAGE
     
     enabled_ = false;
     ESP_LOGI(TAG, "RF module disabled");
@@ -135,9 +145,17 @@ void RFModule::Send(const std::string& address, const std::string& key, RFFreque
     send_count_++;
     
     if (freq == RF_315MHZ) {
+#if CONFIG_RF_MODULE_ENABLE_315MHZ
         SendSignalTCSwitch(address, key);
+#else
+        ESP_LOGE(TAG, "315MHz frequency support is disabled");
+#endif // CONFIG_RF_MODULE_ENABLE_315MHZ
     } else {
+#if CONFIG_RF_MODULE_ENABLE_433MHZ
         SendSignalRCSwitch(address, key);
+#else
+        ESP_LOGE(TAG, "433MHz frequency support is disabled");
+#endif // CONFIG_RF_MODULE_ENABLE_433MHZ
     }
 }
 
@@ -150,17 +168,21 @@ bool RFModule::ReceiveAvailable() {
         return false;
     }
     
+#if CONFIG_RF_MODULE_ENABLE_433MHZ
     // Check 433MHz interrupt receive
     if (rc_switch_ != nullptr && receive_enabled_433_ && rc_switch_->available()) {
         ESP_LOGI(TAG, "[433MHz接收] 检测到可用信号");
         return true;
     }
+#endif // CONFIG_RF_MODULE_ENABLE_433MHZ
     
+#if CONFIG_RF_MODULE_ENABLE_315MHZ
     // Check 315MHz interrupt receive
     if (tc_switch_ != nullptr && receive_enabled_315_ && tc_switch_->available()) {
         ESP_LOGI(TAG, "[315MHz接收] 检测到可用信号");
         return true;
     }
+#endif // CONFIG_RF_MODULE_ENABLE_315MHZ
     
     return false;
 }
@@ -170,6 +192,7 @@ bool RFModule::Receive(RFSignal& signal) {
         return false;
     }
     
+#if CONFIG_RF_MODULE_ENABLE_433MHZ
     // Check 433MHz interrupt receive
     if (rc_switch_ != nullptr && receive_enabled_433_ && rc_switch_->available()) {
         unsigned long value = rc_switch_->getReceivedValue();
@@ -248,7 +271,9 @@ bool RFModule::Receive(RFSignal& signal) {
         }
         rc_switch_->resetAvailable();
     }
+#endif // CONFIG_RF_MODULE_ENABLE_433MHZ
     
+#if CONFIG_RF_MODULE_ENABLE_315MHZ
     // Check 315MHz interrupt receive
     if (tc_switch_ != nullptr && receive_enabled_315_ && tc_switch_->available()) {
         unsigned long value = tc_switch_->getReceivedValue();
@@ -318,6 +343,7 @@ bool RFModule::Receive(RFSignal& signal) {
         }
         tc_switch_->resetAvailable();
     }
+#endif // CONFIG_RF_MODULE_ENABLE_315MHZ
     
     return false;
 }
@@ -325,72 +351,96 @@ bool RFModule::Receive(RFSignal& signal) {
 void RFModule::SetRepeatCount(uint8_t count, RFFrequency freq) {
     // If freq is 0xFF (not specified), set both frequencies
     if (freq == (RFFrequency)0xFF) {
+#if CONFIG_RF_MODULE_ENABLE_433MHZ
         repeat_count_433_ = count;
-        repeat_count_315_ = count;
         if (rc_switch_ != nullptr) {
             rc_switch_->setRepeatTransmit(count);
         }
+#endif // CONFIG_RF_MODULE_ENABLE_433MHZ
+#if CONFIG_RF_MODULE_ENABLE_315MHZ
+        repeat_count_315_ = count;
         if (tc_switch_ != nullptr) {
             tc_switch_->setRepeatTransmit(count);
         }
+#endif // CONFIG_RF_MODULE_ENABLE_315MHZ
     } else if (freq == RF_315MHZ) {
+#if CONFIG_RF_MODULE_ENABLE_315MHZ
         repeat_count_315_ = count;
         if (tc_switch_ != nullptr) {
             tc_switch_->setRepeatTransmit(count);
         }
+#endif // CONFIG_RF_MODULE_ENABLE_315MHZ
     } else {
+#if CONFIG_RF_MODULE_ENABLE_433MHZ
         repeat_count_433_ = count;
         if (rc_switch_ != nullptr) {
             rc_switch_->setRepeatTransmit(count);
         }
+#endif // CONFIG_RF_MODULE_ENABLE_433MHZ
     }
 }
 
 void RFModule::SetProtocol(uint8_t protocol, RFFrequency freq) {
     // If freq is 0xFF (not specified), set both frequencies
     if (freq == (RFFrequency)0xFF) {
+#if CONFIG_RF_MODULE_ENABLE_433MHZ
         protocol_433_ = protocol;
-        protocol_315_ = protocol;
         if (rc_switch_ != nullptr) {
             rc_switch_->setProtocol(protocol);
         }
+#endif // CONFIG_RF_MODULE_ENABLE_433MHZ
+#if CONFIG_RF_MODULE_ENABLE_315MHZ
+        protocol_315_ = protocol;
         if (tc_switch_ != nullptr) {
             tc_switch_->setProtocol(protocol);
         }
+#endif // CONFIG_RF_MODULE_ENABLE_315MHZ
     } else if (freq == RF_315MHZ) {
+#if CONFIG_RF_MODULE_ENABLE_315MHZ
         protocol_315_ = protocol;
         if (tc_switch_ != nullptr) {
             tc_switch_->setProtocol(protocol);
         }
+#endif // CONFIG_RF_MODULE_ENABLE_315MHZ
     } else {
+#if CONFIG_RF_MODULE_ENABLE_433MHZ
         protocol_433_ = protocol;
         if (rc_switch_ != nullptr) {
             rc_switch_->setProtocol(protocol);
         }
+#endif // CONFIG_RF_MODULE_ENABLE_433MHZ
     }
 }
 
 void RFModule::SetPulseLength(uint16_t pulse_length, RFFrequency freq) {
     // If freq is 0xFF (not specified), set both frequencies
     if (freq == (RFFrequency)0xFF) {
+#if CONFIG_RF_MODULE_ENABLE_433MHZ
         pulse_length_433_ = pulse_length;
-        pulse_length_315_ = pulse_length;
         if (rc_switch_ != nullptr) {
             rc_switch_->setPulseLength(pulse_length);
         }
+#endif // CONFIG_RF_MODULE_ENABLE_433MHZ
+#if CONFIG_RF_MODULE_ENABLE_315MHZ
+        pulse_length_315_ = pulse_length;
         if (tc_switch_ != nullptr) {
             tc_switch_->setPulseLength(pulse_length);
         }
+#endif // CONFIG_RF_MODULE_ENABLE_315MHZ
     } else if (freq == RF_315MHZ) {
+#if CONFIG_RF_MODULE_ENABLE_315MHZ
         pulse_length_315_ = pulse_length;
         if (tc_switch_ != nullptr) {
             tc_switch_->setPulseLength(pulse_length);
         }
+#endif // CONFIG_RF_MODULE_ENABLE_315MHZ
     } else {
+#if CONFIG_RF_MODULE_ENABLE_433MHZ
         pulse_length_433_ = pulse_length;
         if (rc_switch_ != nullptr) {
             rc_switch_->setPulseLength(pulse_length);
         }
+#endif // CONFIG_RF_MODULE_ENABLE_433MHZ
     }
 }
 
@@ -411,11 +461,11 @@ void RFModule::DisableCaptureMode() {
 void RFModule::ClearCapturedSignal() {
     has_captured_signal_ = false;
     captured_signal_ = RFSignal();
-    #ifdef ESP32
+#if CONFIG_RF_MODULE_ENABLE_FLASH_STORAGE
     if (flash_storage_enabled_) {
         ClearFlash();
     }
-    #endif
+#endif // CONFIG_RF_MODULE_ENABLE_FLASH_STORAGE
 }
 
 void RFModule::SetReceiveCallback(ReceiveCallback callback) {
@@ -799,29 +849,41 @@ void RFModule::ResetCounters() {
 
 void RFModule::EnableReceive(RFFrequency freq) {
     if (freq == RF_315MHZ) {
+#if CONFIG_RF_MODULE_ENABLE_315MHZ
         receive_enabled_315_ = true;
         if (tc_switch_ != nullptr && enabled_) {
             tc_switch_->enableReceive(static_cast<int>(rx315_pin_));
         }
+#else
+        ESP_LOGW(TAG, "315MHz frequency support is disabled");
+#endif // CONFIG_RF_MODULE_ENABLE_315MHZ
     } else {
+#if CONFIG_RF_MODULE_ENABLE_433MHZ
         receive_enabled_433_ = true;
         if (rc_switch_ != nullptr && enabled_) {
             rc_switch_->enableReceive(static_cast<int>(rx433_pin_));
         }
+#else
+        ESP_LOGW(TAG, "433MHz frequency support is disabled");
+#endif // CONFIG_RF_MODULE_ENABLE_433MHZ
     }
 }
 
 void RFModule::DisableReceive(RFFrequency freq) {
     if (freq == RF_315MHZ) {
+#if CONFIG_RF_MODULE_ENABLE_315MHZ
         receive_enabled_315_ = false;
         if (tc_switch_ != nullptr) {
             tc_switch_->disableReceive();
         }
+#endif // CONFIG_RF_MODULE_ENABLE_315MHZ
     } else {
+#if CONFIG_RF_MODULE_ENABLE_433MHZ
         receive_enabled_433_ = false;
         if (rc_switch_ != nullptr) {
             rc_switch_->disableReceive();
         }
+#endif // CONFIG_RF_MODULE_ENABLE_433MHZ
     }
 }
 

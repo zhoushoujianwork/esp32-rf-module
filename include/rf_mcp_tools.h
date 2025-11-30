@@ -1,6 +1,10 @@
 #ifndef RF_MCP_TOOLS_H
 #define RF_MCP_TOOLS_H
 
+#if !CONFIG_RF_MODULE_ENABLE_MCP_TOOLS
+#error "MCP Tools are disabled. Enable CONFIG_RF_MODULE_ENABLE_MCP_TOOLS in menuconfig."
+#endif
+
 #include "mcp_server.h"
 #include "rf_module.h"
 #include <cJSON.h>

@@ -4,7 +4,27 @@
 #include <driver/gpio.h>
 #include <string>
 #include <cstdint>
+
+// Feature flags from Kconfig with defaults for backward compatibility
+#ifndef CONFIG_RF_MODULE_ENABLE_FLASH_STORAGE
+#define CONFIG_RF_MODULE_ENABLE_FLASH_STORAGE 1
+#endif
+
+#ifndef CONFIG_RF_MODULE_MAX_FLASH_SIGNALS
+#define CONFIG_RF_MODULE_MAX_FLASH_SIGNALS 10
+#endif
+
+#ifndef CONFIG_RF_MODULE_ENABLE_433MHZ
+#define CONFIG_RF_MODULE_ENABLE_433MHZ 1
+#endif
+
+#ifndef CONFIG_RF_MODULE_ENABLE_315MHZ
+#define CONFIG_RF_MODULE_ENABLE_315MHZ 1
+#endif
+
+#if CONFIG_RF_MODULE_ENABLE_FLASH_STORAGE
 #include <nvs.h>  // NVS available on all ESP32 series chips
+#endif
 
 // Forward declarations
 class RCSwitch;
@@ -144,7 +164,7 @@ private:
     bool receive_enabled_315_;
     
     // Flash storage (NVS available on all ESP32 series chips)
-    static constexpr uint8_t MAX_FLASH_SIGNALS = 10;  // Maximum number of signals to store in flash
+    static constexpr uint8_t MAX_FLASH_SIGNALS = CONFIG_RF_MODULE_MAX_FLASH_SIGNALS;  // Maximum number of signals to store in flash (configurable via Kconfig)
     bool flash_storage_enabled_;
     nvs_handle_t nvs_handle_;
     std::string flash_namespace_;

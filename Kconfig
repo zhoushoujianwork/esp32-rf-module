@@ -1,0 +1,57 @@
+menu "ESP32 RF Module Configuration"
+
+    config RF_MODULE_ENABLE_FLASH_STORAGE
+        bool "Enable Flash Storage (NVS)"
+        default y
+        help
+            Enable NVS flash storage for signal persistence.
+            When enabled, received signals are automatically saved to flash.
+            Requires nvs_flash component.
+
+    config RF_MODULE_MAX_FLASH_SIGNALS
+        int "Maximum Flash Storage Signals"
+        range 1 20
+        default 10
+        depends on RF_MODULE_ENABLE_FLASH_STORAGE
+        help
+            Maximum number of signals to store in flash storage.
+            Uses circular buffer, oldest signals are overwritten when full.
+
+    config RF_MODULE_ENABLE_433MHZ
+        bool "Enable 433MHz Frequency Support"
+        default y
+        help
+            Enable support for 433MHz RF signals.
+            Requires RCSwitch component.
+
+    config RF_MODULE_ENABLE_315MHZ
+        bool "Enable 315MHz Frequency Support"
+        default y
+        help
+            Enable support for 315MHz RF signals.
+            Requires TCSwitch component.
+
+    config RF_MODULE_ENABLE_MCP_TOOLS
+        bool "Enable MCP Tools"
+        default y
+        depends on RF_MODULE_ENABLE_FLASH_STORAGE
+        help
+            Enable MCP (Model Context Protocol) tools integration.
+            Provides self.rf.* tools for AI-driven device control.
+            Requires mcp_server component from the main project.
+
+    config RF_MODULE_LOG_LEVEL
+        int "Log Level"
+        range 0 5
+        default 3
+        help
+            Set the log level for RF module:
+            0 = None
+            1 = Error
+            2 = Warning
+            3 = Info
+            4 = Debug
+            5 = Verbose
+
+endmenu
+

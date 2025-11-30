@@ -59,6 +59,61 @@ dependencies:
   zhoushoujianwork/esp32-rf-module: "^1.0.0"
 ```
 
+## 配置
+
+本库支持通过 ESP-IDF 的 Kconfig 系统进行功能配置。运行 `idf.py menuconfig`，进入 `Component config` → `ESP32 RF Module Configuration` 进行配置。
+
+### 配置选项
+
+- **Enable Flash Storage (NVS)** (`RF_MODULE_ENABLE_FLASH_STORAGE`)
+  - 默认：启用
+  - 启用 NVS 闪存存储功能，用于信号持久化
+
+- **Maximum Flash Storage Signals** (`RF_MODULE_MAX_FLASH_SIGNALS`)
+  - 默认：10
+  - 范围：1-20
+  - 闪存中最多保存的信号数量（循环缓冲区）
+
+- **Enable 433MHz Frequency Support** (`RF_MODULE_ENABLE_433MHZ`)
+  - 默认：启用
+  - 启用 433MHz 频率支持
+
+- **Enable 315MHz Frequency Support** (`RF_MODULE_ENABLE_315MHZ`)
+  - 默认：启用
+  - 启用 315MHz 频率支持
+
+- **Enable MCP Tools** (`RF_MODULE_ENABLE_MCP_TOOLS`)
+  - 默认：启用
+  - 启用 MCP 工具集成（需要 Flash Storage 支持）
+  - 如果禁用，`rf_mcp_tools.h` 将无法编译
+
+- **Log Level** (`RF_MODULE_LOG_LEVEL`)
+  - 默认：3 (Info)
+  - 范围：0-5
+  - 设置日志级别（0=None, 1=Error, 2=Warning, 3=Info, 4=Debug, 5=Verbose）
+
+### 配置示例
+
+如果只需要 433MHz 支持，可以禁用 315MHz：
+
+```
+Component config → ESP32 RF Module Configuration
+  [*] Enable Flash Storage (NVS)
+  [*] Enable 433MHz Frequency Support
+  [ ] Enable 315MHz Frequency Support
+  [*] Enable MCP Tools
+```
+
+如果不需要 MCP 工具，可以禁用：
+
+```
+Component config → ESP32 RF Module Configuration
+  [*] Enable Flash Storage (NVS)
+  [ ] Enable MCP Tools
+```
+
+**注意**：禁用功能后，相关代码会被条件编译排除，减少代码体积。
+
 ## 使用方法
 
 ### 基本使用
