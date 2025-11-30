@@ -1,0 +1,20 @@
+# Build files
+build/
+*.bin
+*.elf
+*.map
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Dependencies
+managed_components/
+

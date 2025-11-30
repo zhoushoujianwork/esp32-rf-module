@@ -1,0 +1,12 @@
+## IDF Component Manager Manifest File
+## ESP32 RF Module Library
+## Supports 315MHz and 433MHz RF signal transmission and reception
+
+description: "ESP32 RF Module Library for 315MHz and 433MHz signal transmission and reception"
+url: "https://github.com/mikas/esp32-rf-module"
+version: "1.0.0"
+
+## Required IDF version
+idf:
+  version: '>=5.4.0'
+
