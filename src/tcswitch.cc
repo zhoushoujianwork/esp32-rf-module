@@ -1,4 +1,4 @@
-#include "rcswitch.h"
+#include "esp32_rf_module/tcswitch.h"
 #include <esp_log.h>
 #include <driver/gpio.h>
 #include <freertos/FreeRTOS.h>
@@ -6,20 +6,20 @@
 #include <esp_timer.h>
 #include <string.h>
 
-#define TAG "RCSwitch"
+#define TAG "TCSwitch"
 
 // Static member initialization
-volatile unsigned long RCSwitch::nReceivedValue = 0;
-volatile unsigned int RCSwitch::nReceivedBitlength = 0;
-volatile unsigned int RCSwitch::nReceivedDelay = 0;
-volatile unsigned int RCSwitch::nReceivedProtocol = 0;
-int RCSwitch::nReceiveTolerance = 60;
-const unsigned int RCSwitch::nSeparationLimit = 4300;
-unsigned int RCSwitch::timings[67] = {0};
-RCSwitch* RCSwitch::instance = nullptr;
+volatile unsigned long TCSwitch::nReceivedValue = 0;
+volatile unsigned int TCSwitch::nReceivedBitlength = 0;
+volatile unsigned int TCSwitch::nReceivedDelay = 0;
+volatile unsigned int TCSwitch::nReceivedProtocol = 0;
+int TCSwitch::nReceiveTolerance = 60;
+const unsigned int TCSwitch::nSeparationLimit = 4300;
+unsigned int TCSwitch::timings[67] = {0};
+TCSwitch* TCSwitch::instance = nullptr;
 
-// Protocol definitions (simplified, based on common RCSwitch protocols)
-static const RCSwitch::Protocol proto[] = {
+// Protocol definitions (same as RCSwitch for 315MHz)
+static const TCSwitch::Protocol proto[] = {
     { 350, {  1, 31 }, {  1,  3 }, {  3,  1 }, false },    // protocol 1
     { 650, {  1, 10 }, {  1,  2 }, {  2,  1 }, false },    // protocol 2
     { 100, { 30, 71 }, {  4, 11 }, {  9,  6 }, false },    // protocol 3
@@ -27,7 +27,7 @@ static const RCSwitch::Protocol proto[] = {
     { 500, {  6, 14 }, {  1,  2 }, {  2,  1 }, false },    // protocol 5
 };
 
-RCSwitch::RCSwitch() {
+TCSwitch::TCSwitch() {
     nTransmitterPin = GPIO_NUM_NC;
     nRepeatTransmit = 10;
     nReceiverInterrupt = -1;
@@ -35,7 +35,7 @@ RCSwitch::RCSwitch() {
     instance = this;
 }
 
-RCSwitch::~RCSwitch() {
+TCSwitch::~TCSwitch() {
     disableReceive();
     disableTransmit();
     if (instance == this) {
@@ -43,28 +43,28 @@ RCSwitch::~RCSwitch() {
     }
 }
 
-void RCSwitch::enableTransmit(int nTransmitterPin) {
+void TCSwitch::enableTransmit(int nTransmitterPin) {
     this->nTransmitterPin = static_cast<gpio_num_t>(nTransmitterPin);
     gpio_set_direction(this->nTransmitterPin, GPIO_MODE_OUTPUT);
     gpio_set_level(this->nTransmitterPin, 0);
 }
 
-void RCSwitch::disableTransmit() {
+void TCSwitch::disableTransmit() {
     if (nTransmitterPin != GPIO_NUM_NC) {
         gpio_set_level(nTransmitterPin, 0);
         nTransmitterPin = GPIO_NUM_NC;
     }
 }
 
-void RCSwitch::setPulseLength(int nPulseLength) {
+void TCSwitch::setPulseLength(int nPulseLength) {
     protocol.pulseLength = nPulseLength;
 }
 
-void RCSwitch::setRepeatTransmit(int nRepeatTransmit) {
+void TCSwitch::setRepeatTransmit(int nRepeatTransmit) {
     this->nRepeatTransmit = nRepeatTransmit;
 }
 
-void RCSwitch::setProtocol(int nProtocol) {
+void TCSwitch::setProtocol(int nProtocol) {
     if (nProtocol >= 1 && nProtocol <= 5) {
         protocol = proto[nProtocol - 1];
     } else {
@@ -72,7 +72,7 @@ void RCSwitch::setProtocol(int nProtocol) {
     }
 }
 
-void RCSwitch::send(unsigned long code, unsigned int length) {
+void TCSwitch::send(unsigned long code, unsigned int length) {
     if (nTransmitterPin == GPIO_NUM_NC) {
         return;
     }
@@ -95,7 +95,7 @@ void RCSwitch::send(unsigned long code, unsigned int length) {
     }
 }
 
-void RCSwitch::transmit(HighLow pulses) {
+void TCSwitch::transmit(HighLow pulses) {
     int pulse_length = protocol.pulseLength;
     
     auto delay_us = [](uint32_t us) {
@@ -123,8 +123,8 @@ static inline unsigned int diff(int A, int B) {
     return (A > B) ? (A - B) : (B - A);
 }
 
-void IRAM_ATTR RCSwitch::handleInterrupt(void* arg) {
-    RCSwitch* self = static_cast<RCSwitch*>(arg);
+void IRAM_ATTR TCSwitch::handleInterrupt(void* arg) {
+    TCSwitch* self = static_cast<TCSwitch*>(arg);
     if (!self) return;
     
     static unsigned long lastTime = 0;
@@ -163,8 +163,8 @@ void IRAM_ATTR RCSwitch::handleInterrupt(void* arg) {
     lastTime = now;
 }
 
-bool RCSwitch::receiveProtocol(const int p, unsigned int changeCount) {
-    if (p < 1 || p > 5) return false;
+bool TCSwitch::receiveProtocol(const int p, unsigned int changeCount) {
+    if (p < 1 || p > 5) return false;  // Only support protocols 1-5 for now
     
     const Protocol& pro = proto[p - 1];
     
@@ -202,7 +202,7 @@ bool RCSwitch::receiveProtocol(const int p, unsigned int changeCount) {
     return false;
 }
 
-void RCSwitch::enableReceive(int interrupt) {
+void TCSwitch::enableReceive(int interrupt) {
     nReceiverInterrupt = interrupt;
     gpio_num_t pin = static_cast<gpio_num_t>(interrupt);
     
@@ -223,37 +223,37 @@ void RCSwitch::enableReceive(int interrupt) {
     memset(timings, 0, sizeof(timings));
 }
 
-void RCSwitch::disableReceive() {
+void TCSwitch::disableReceive() {
     if (nReceiverInterrupt >= 0) {
         gpio_isr_handler_remove(static_cast<gpio_num_t>(nReceiverInterrupt));
         nReceiverInterrupt = -1;
     }
 }
 
-bool RCSwitch::available() {
+bool TCSwitch::available() {
     return nReceivedValue != 0;
 }
 
-void RCSwitch::resetAvailable() {
+void TCSwitch::resetAvailable() {
     nReceivedValue = 0;
     nReceivedBitlength = 0;
     nReceivedDelay = 0;
     nReceivedProtocol = 0;
 }
 
-unsigned long RCSwitch::getReceivedValue() {
+unsigned long TCSwitch::getReceivedValue() {
     return nReceivedValue;
 }
 
-unsigned int RCSwitch::getReceivedBitlength() {
+unsigned int TCSwitch::getReceivedBitlength() {
     return nReceivedBitlength;
 }
 
-unsigned int RCSwitch::getReceivedDelay() {
+unsigned int TCSwitch::getReceivedDelay() {
     return nReceivedDelay;
 }
 
-unsigned int RCSwitch::getReceivedProtocol() {
+unsigned int TCSwitch::getReceivedProtocol() {
     return nReceivedProtocol;
 }
 

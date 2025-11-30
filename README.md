@@ -62,7 +62,7 @@ dependencies:
 ### 基本使用
 
 ```cpp
-#include "rf_module.h"
+#include "esp32_rf_module/rf_module.h"
 
 // 初始化 RF 模块
 RFModule rf_module(
@@ -94,7 +94,7 @@ rf_module.End();
 如果你的项目支持 MCP 协议，可以使用 `rf_mcp_tools.h` 注册 MCP 工具：
 
 ```cpp
-#include "rf_mcp_tools.h"
+#include "esp32_rf_module/mcp/rf_mcp_tools.h"
 #include "mcp_server.h"  // 需要你的项目提供 MCP Server
 
 // 在板子初始化时注册 MCP 工具
@@ -183,12 +183,36 @@ RF 信号采用 24 位编码格式：
 - ESP-IDF >= 5.4.0
 - nvs_flash（用于信号持久化存储）
 
+## 目录结构
+
+```
+esp32-rf-module/
+├── CMakeLists.txt              # ESP-IDF 组件构建配置
+├── idf_component.yml           # Component Manager 清单文件
+├── README.md                   # 库文档
+├── LICENSE                     # MIT 许可证
+├── include/
+│   └── esp32_rf_module/        # 公共头文件目录
+│       ├── rf_module.h         # RF 模块核心类
+│       ├── rcswitch.h          # 433MHz 协议处理
+│       ├── tcswitch.h          # 315MHz 协议处理
+│       └── mcp/                # MCP 工具集成（可选）
+│           └── rf_mcp_tools.h  # MCP 工具注册函数
+└── src/                        # 源文件目录
+    ├── rf_module.cc
+    ├── rcswitch.cc
+    └── tcswitch.cc
+```
+
 ## 文件说明
 
-- `rf_module.h/cc`: RF 模块核心类
-- `rcswitch.h/cc`: 433MHz 协议处理
-- `tcswitch.h/cc`: 315MHz 协议处理
-- `rf_mcp_tools.h`: MCP 工具集成（可选，需要 MCP Server）
+- **核心功能**（必需）：
+  - `include/esp32_rf_module/rf_module.h` + `src/rf_module.cc`: RF 模块核心类
+  - `include/esp32_rf_module/rcswitch.h` + `src/rcswitch.cc`: 433MHz 协议处理
+  - `include/esp32_rf_module/tcswitch.h` + `src/tcswitch.cc`: 315MHz 协议处理
+
+- **MCP 工具集成**（可选，需要 MCP Server）：
+  - `include/esp32_rf_module/mcp/rf_mcp_tools.h`: MCP 工具注册函数，用于小智 AI 对话集成
 
 ## 许可证
 

@@ -1,10 +1,10 @@
 idf_component_register(
     SRCS 
-        "rf_module.cc"
-        "rcswitch.cc"
-        "tcswitch.cc"
+        "src/rf_module.cc"
+        "src/rcswitch.cc"
+        "src/tcswitch.cc"
     INCLUDE_DIRS 
-        "."
+        "include"
     REQUIRES 
         nvs_flash
 )

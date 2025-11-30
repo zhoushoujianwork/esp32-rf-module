@@ -1,8 +1,8 @@
 #ifndef RF_MCP_TOOLS_H
 #define RF_MCP_TOOLS_H
 
-#include "mcp_server.h"
-#include "rf_module.h"
+#include "mcp_server.h"  // 需要项目提供 MCP Server
+#include "esp32_rf_module/rf_module.h"
 #include <cJSON.h>
 #include <esp_timer.h>
 #include <freertos/FreeRTOS.h>
