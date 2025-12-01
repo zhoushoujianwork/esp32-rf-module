@@ -55,16 +55,17 @@ ESP32 RF 收发模块库，支持 315MHz 和 433MHz 双频段 RF 信号收发。
 ### PCB 预览
 
 #### PCB 布局图
-![PCB Layout - 315/433MHz 收发模块 PCB 布局](https://oshwhub.com/zhoushoujian/esp32-rf-management-system)
+![PCB Layout - 315/433MHz 收发模块 PCB 布局](docs/images/pcb_layout.png)
 
 > 📐 **PCB 布局特点**：
 > - 左右对称设计，分别对应 315MHz 和 433MHz 频段
 > - 每个频段包含独立的 RF 收发模块和天线连接器
 > - 中央区域为 6P 接口和控制电路
 > - 四角安装孔，方便固定安装
+> - PCB 尺寸：46.2mm × 42.2mm
 
 #### 3D 渲染图
-![PCB 3D View - 315/433MHz 收发模块 3D 视图](https://oshwhub.com/zhoushoujian/esp32-rf-management-system)
+![PCB 3D View - 315/433MHz 收发模块 3D 视图](docs/images/pcb_3d.png)
 
 > 🎨 **3D 视图说明**：
 > - 蓝色 PCB 基板，表面贴装元件
