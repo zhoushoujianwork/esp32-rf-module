@@ -39,6 +39,44 @@ ESP32 RF 收发模块库，支持 315MHz 和 433MHz 双频段 RF 信号收发。
 - `RF_TX_433_PIN`: 433MHz 发送引脚
 - `RF_RX_433_PIN`: 433MHz 接收引脚
 
+## 硬件设计
+
+本库配套的 PCB 设计已开源，可在立创开源广场查看和下载：
+
+🔗 **[ESP32 RF 管理模块 PCB 设计](https://oshwhub.com/zhoushoujian/esp32-rf-management-system)**
+
+### PCB 设计特点
+
+- **双频段设计**：独立的 315MHz 和 433MHz RF 收发模块
+- **6P 接口**：标准化的 6 引脚接口，方便集成到主控板
+- **尺寸**：46.2mm × 42.2mm，紧凑设计
+- **版本**：V1.0.0
+
+### PCB 预览
+
+#### PCB 布局图
+![PCB Layout - 315/433MHz 收发模块 PCB 布局](https://oshwhub.com/zhoushoujian/esp32-rf-management-system)
+
+> 📐 **PCB 布局特点**：
+> - 左右对称设计，分别对应 315MHz 和 433MHz 频段
+> - 每个频段包含独立的 RF 收发模块和天线连接器
+> - 中央区域为 6P 接口和控制电路
+> - 四角安装孔，方便固定安装
+
+#### 3D 渲染图
+![PCB 3D View - 315/433MHz 收发模块 3D 视图](https://oshwhub.com/zhoushoujian/esp32-rf-management-system)
+
+> 🎨 **3D 视图说明**：
+> - 蓝色 PCB 基板，表面贴装元件
+> - 左右两侧分别为 315MHz 和 433MHz RF 模块
+> - 顶部中央为 6P 接口（G, 3T, 3R, 4R, 4T, V）
+> - 支持 SMA 天线接口（可选）
+
+> 💡 **提示**：
+> - PCB 设计文件、原理图和 BOM 清单均可在 [立创开源广场项目页面](https://oshwhub.com/zhoushoujian/esp32-rf-management-system) 下载
+> - 支持嘉立创 EDA 直接打开和编辑
+> - PCB 尺寸：46.2mm × 42.2mm，支持标准 6P 接口连接
+
 ## 安装
 
 ### 作为 ESP-IDF 组件
