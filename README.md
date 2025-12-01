@@ -480,13 +480,16 @@ Copyright (c) 2025 Project Contributors
 - `send_by_index` 现在返回包含信号详细信息的 JSON 对象（index, address, key, frequency, protocol, pulse_length）
 - 修复 AI 回复中信号地址显示错误的问题（之前只返回 true，AI 需要从日志推断，容易出错）
 
+### v0.1.9
+- **重构**：将 MCP 工具 `self.rf.receive` 重命名为 `self.rf.copy`，更符合复制/克隆信号的语义
+- 更新所有相关描述和日志信息，统一使用"复制/克隆"术语
+- 工具名称更直观地表达其功能：复制/克隆RF信号
+
 ### v0.1.8
 - **修复**：修复信号索引编号逻辑，按录入顺序递增编号
 - 最新录入的信号索引最大，第一个录入的信号索引为1
 - 修复 `list_signals`、`send_by_index` 和 `CheckDuplicateSignal` 中的索引计算逻辑
 - 确保索引编号符合常规递增设定
-- **重构**：将 MCP 工具 `self.rf.receive` 重命名为 `self.rf.copy`，更符合复制/克隆信号的语义
-- 更新所有相关描述和日志信息，统一使用"复制/克隆"术语
 
 ### v0.1.6
 - **文档更新**：添加立创开源广场 PCB 设计链接和图片
