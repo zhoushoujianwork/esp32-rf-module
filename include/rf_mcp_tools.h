@@ -35,7 +35,7 @@ inline void RegisterRFMcpTools(RFModule* rf_module) {
         "发送RF信号到指定频率（315MHz或433MHz）。"
         "信号默认发送3次（行业标准）。"
         "注意：此工具直接发送信号，不会保存信号。"
-        "如需保存信号以便后续重播，请先使用 self.rf.receive 接收信号。"
+        "如需保存信号以便后续重播，请先使用 self.rf.copy 复制信号。"
         "参数：address（6位十六进制，例如 \"1A2B3C\"）、key（2位十六进制，例如 \"01\"）、frequency（\"315\" 或 \"433\"）",
         PropertyList({
             Property("address", kPropertyTypeString),
@@ -58,9 +58,9 @@ inline void RegisterRFMcpTools(RFModule* rf_module) {
             return true;
         });
 
-    mcp_server.AddTool("self.rf.receive",
-        "接收RF信号（自动识别315MHz或433MHz频率）。"
-        "这是复制/克隆信号的第一步：调用此工具并等待用户按下遥控器。"
+    mcp_server.AddTool("self.rf.copy",
+        "复制/克隆RF信号（自动识别315MHz或433MHz频率）。"
+        "调用此工具并等待用户按下遥控器，系统会自动接收并保存信号。"
         "RF模块同时监听两个频率并自动识别信号频率。"
         "所有接收到的信号都会自动保存到闪存（最多10个信号，循环缓冲区）。"
         "这是一个阻塞调用，最多等待10秒接收信号。"
@@ -69,8 +69,8 @@ inline void RegisterRFMcpTools(RFModule* rf_module) {
         "- 检测到重复信号：工具会抛出异常（error响应），错误消息为'信号保存失败：检测到重复信号...'，此时信号不会被保存。这不是超时，而是重复信号错误。"
         "- 超时未接收到信号：返回null（不是error响应）。"
         "重要：如果工具返回error响应，说明检测到重复信号或存储已满，错误消息会详细说明原因。如果返回null，说明超时未接收到信号。"
-        "重要：要复制/克隆信号，需要两个步骤：(1) 调用 self.rf.receive 接收信号，(2) 调用 self.rf.replay 重播/发送复制的信号。"
-        "仅接收信号并不等于复制/克隆，必须同时调用 self.rf.replay 才能完成复制/克隆操作。"
+        "重要：要完成复制/克隆信号，需要两个步骤：(1) 调用 self.rf.copy 复制信号，(2) 调用 self.rf.replay 重播/发送复制的信号。"
+        "仅复制信号并不等于完成克隆，必须同时调用 self.rf.replay 才能完成克隆操作。"
         "使用 self.rf.get_status 可以非阻塞查询最新接收的信号。"
         "使用 self.rf.list_signals 可以查看所有保存的信号（最多10个）及其索引。"
         "参数：timeout_ms（可选，默认10000）",
@@ -82,7 +82,7 @@ inline void RegisterRFMcpTools(RFModule* rf_module) {
             int timeout_ms = properties["timeout_ms"].value<int>();
             int64_t start_time = esp_timer_get_time();
             
-            ESP_LOGI(TAG_RF_MCP, "[接收] 开始等待RF信号，超时时间: %dms", timeout_ms);
+            ESP_LOGI(TAG_RF_MCP, "[复制] 开始等待RF信号，超时时间: %dms", timeout_ms);
             
             // 先清空已处理的信号，避免主循环重复处理
             // 如果已有信号，先处理掉（避免重复保存）
@@ -95,16 +95,16 @@ inline void RegisterRFMcpTools(RFModule* rf_module) {
             if (rf_module->ReceiveAvailable()) {
                 RFSignal signal;
                 if (rf_module->Receive(signal)) {
-                    // Explicitly save to flash storage for self.rf.receive tool
+                    // Explicitly save to flash storage for self.rf.copy tool
                     // Check if storage is full before saving
                     if (rf_module->IsFlashStorageEnabled()) {
                         uint8_t current_count = rf_module->GetFlashSignalCount();
                         if (current_count >= 10) {
-                            ESP_LOGW(TAG_RF_MCP, "[接收] ⚠️ 信号存储已满 (10/10)，无法保存新信号");
+                            ESP_LOGW(TAG_RF_MCP, "[复制] ⚠️ 信号存储已满 (10/10)，无法保存新信号");
                             throw std::runtime_error("Signal storage is full (10/10). Please use self.rf.list_signals to see saved signals, or clear some signals.");
                         }
                         if (!rf_module->SaveToFlash()) {
-                            ESP_LOGW(TAG_RF_MCP, "[接收] ⚠️ 保存信号到闪存失败");
+                            ESP_LOGW(TAG_RF_MCP, "[复制] ⚠️ 保存信号到闪存失败");
                         }
                     }
                     
@@ -113,11 +113,11 @@ inline void RegisterRFMcpTools(RFModule* rf_module) {
                     bool is_duplicate = rf_module->CheckDuplicateSignal(signal, duplicate_index);
                     
                     if (is_duplicate) {
-                        ESP_LOGW(TAG_RF_MCP, "[接收] ⚠️ 接收到重复信号: %s%s (%sMHz) - 与闪存中索引%d的信号相同", 
+                        ESP_LOGW(TAG_RF_MCP, "[复制] ⚠️ 接收到重复信号: %s%s (%sMHz) - 与闪存中索引%d的信号相同", 
                                 signal.address.c_str(), signal.key.c_str(),
                                 signal.frequency == RF_315MHZ ? "315" : "433", duplicate_index);
                     } else {
-                        ESP_LOGI(TAG_RF_MCP, "[接收] 立即接收到信号: %s%s (%sMHz)", 
+                        ESP_LOGI(TAG_RF_MCP, "[复制] 立即接收到信号: %s%s (%sMHz)", 
                                 signal.address.c_str(), signal.key.c_str(),
                                 signal.frequency == RF_315MHZ ? "315" : "433");
                     }
@@ -148,7 +148,7 @@ inline void RegisterRFMcpTools(RFModule* rf_module) {
                         bool is_duplicate = rf_module->CheckDuplicateSignal(signal, duplicate_index);
                         
                         if (is_duplicate) {
-                            ESP_LOGW(TAG_RF_MCP, "[接收] ⚠️ 接收到重复信号: %s%s (%sMHz) - 与闪存中索引%d的信号相同", 
+                            ESP_LOGW(TAG_RF_MCP, "[复制] ⚠️ 接收到重复信号: %s%s (%sMHz) - 与闪存中索引%d的信号相同", 
                                     signal.address.c_str(), signal.key.c_str(),
                                     signal.frequency == RF_315MHZ ? "315" : "433", duplicate_index);
                             
@@ -165,22 +165,22 @@ inline void RegisterRFMcpTools(RFModule* rf_module) {
                             return json;
                         }
                         
-                        // Explicitly save to flash storage for self.rf.receive tool
+                        // Explicitly save to flash storage for self.rf.copy tool
                         // Check if storage is full before saving
                         if (rf_module->IsFlashStorageEnabled()) {
                             uint8_t current_count = rf_module->GetFlashSignalCount();
                             if (current_count >= 10) {
-                                ESP_LOGW(TAG_RF_MCP, "[接收] ⚠️ 信号存储已满 (10/10)，无法保存新信号");
+                                ESP_LOGW(TAG_RF_MCP, "[复制] ⚠️ 信号存储已满 (10/10)，无法保存新信号");
                                 throw std::runtime_error("Signal storage is full (10/10). Please use self.rf.list_signals to see saved signals, or clear some signals.");
                             }
                             if (!rf_module->SaveToFlash()) {
-                                ESP_LOGE(TAG_RF_MCP, "[接收] ✗ 保存信号到闪存失败");
+                                ESP_LOGE(TAG_RF_MCP, "[复制] ✗ 保存信号到闪存失败");
                                 throw std::runtime_error("Failed to save signal to flash storage.");
                             }
                         }
                         
                         int64_t elapsed_ms = (esp_timer_get_time() - start_time) / 1000;
-                        ESP_LOGI(TAG_RF_MCP, "[接收] ✓ 接收到信号: %s%s (%sMHz, 协议:%d, 脉冲:%dμs, 等待时间:%ldms)", 
+                        ESP_LOGI(TAG_RF_MCP, "[复制] ✓ 复制信号成功: %s%s (%sMHz, 协议:%d, 脉冲:%dμs, 等待时间:%ldms)", 
                                 signal.address.c_str(), signal.key.c_str(),
                                 signal.frequency == RF_315MHZ ? "315" : "433",
                                 signal.protocol, signal.pulse_length, (long)elapsed_ms);
@@ -199,7 +199,7 @@ inline void RegisterRFMcpTools(RFModule* rf_module) {
             }
             
             // 超时
-            ESP_LOGW(TAG_RF_MCP, "[接收] ✗ 等待超时，未接收到信号 (超时时间: %dms)", timeout_ms);
+            ESP_LOGW(TAG_RF_MCP, "[复制] ✗ 等待超时，未接收到信号 (超时时间: %dms)", timeout_ms);
             return cJSON_CreateNull();
         });
 
@@ -254,7 +254,7 @@ inline void RegisterRFMcpTools(RFModule* rf_module) {
         "- 超时未捕捉到信号：返回null（不是error响应）。"
         "重要：如果工具返回error响应，说明检测到重复信号或存储已满，错误消息会详细说明原因。如果返回null，说明超时未捕捉到信号。"
         "重要：此工具仅捕捉信号，不会复制/克隆信号。"
-        "要复制/克隆信号，请使用：self.rf.receive（步骤1）+ self.rf.replay（步骤2）。"
+        "要复制/克隆信号，请使用：self.rf.copy（步骤1）+ self.rf.replay（步骤2）。"
         "此捕捉工具主要用于显式捕捉工作流，不用于复制/克隆。"
         "使用 self.rf.list_signals 可以查看所有保存的信号（最多10个）及其索引。"
         "参数：timeout_ms（可选，默认10000）",
@@ -470,11 +470,11 @@ inline void RegisterRFMcpTools(RFModule* rf_module) {
 
     mcp_server.AddTool("self.rf.replay",
         "重播/发送最后接收的信号（复制/克隆的第二步）。"
-        "这是完成复制/克隆信号的第二步：在调用 self.rf.receive（步骤1）接收信号后，"
+        "这是完成复制/克隆信号的第二步：在调用 self.rf.copy（步骤1）复制信号后，"
         "调用此工具重播/发送该信号，完成复制/克隆操作。"
-        "所有通过 self.rf.receive 接收的信号都会自动保存到闪存（最多10个信号，循环缓冲区）。"
-        "此工具重播/发送最近接收的信号。"
-        "重要：复制/克隆信号需要两个步骤：(1) self.rf.receive - 接收信号，(2) self.rf.replay - 发送/重播信号。"
+        "所有通过 self.rf.copy 复制的信号都会自动保存到闪存（最多10个信号，循环缓冲区）。"
+        "此工具重播/发送最近复制的信号。"
+        "重要：复制/克隆信号需要两个步骤：(1) self.rf.copy - 复制信号，(2) self.rf.replay - 发送/重播信号。"
         "只有完成这两个步骤后，信号才被复制/克隆。"
         "可以选择更改重播频率（例如，以433MHz重播315MHz信号）。"
         "信号默认发送3次（行业标准）。"
