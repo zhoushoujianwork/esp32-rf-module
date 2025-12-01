@@ -480,6 +480,12 @@ Copyright (c) 2025 Project Contributors
 - `send_by_index` 现在返回包含信号详细信息的 JSON 对象（index, address, key, frequency, protocol, pulse_length）
 - 修复 AI 回复中信号地址显示错误的问题（之前只返回 true，AI 需要从日志推断，容易出错）
 
+### v0.1.8
+- **修复**：修复信号索引编号逻辑，按录入顺序递增编号
+- 最新录入的信号索引最大，第一个录入的信号索引为1
+- 修复 `list_signals`、`send_by_index` 和 `CheckDuplicateSignal` 中的索引计算逻辑
+- 确保索引编号符合常规递增设定
+
 ### v0.1.6
 - **文档更新**：添加立创开源广场 PCB 设计链接和图片
 - 添加 PCB 布局图和 3D 渲染图预览
