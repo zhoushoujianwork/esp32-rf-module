@@ -4,7 +4,7 @@
 
 description: "ESP32 RF Module Library for 315MHz and 433MHz signal transmission and reception. Designed for xiaozhi-esp32 project with MCP tools integration for AI voice control."
 url: "https://github.com/zhoushoujianwork/esp32-rf-module"
-version: "0.1.9"
+version: "0.1.10"
 
 ## Required IDF version
 idf:
