@@ -665,7 +665,17 @@ inline void RegisterRFMcpTools(RFModule* rf_module) {
             }
             
             rf_module->Send(signal);
-            return true;
+            
+            // 返回信号详细信息，而不是只返回 true
+            cJSON* json = cJSON_CreateObject();
+            cJSON_AddNumberToObject(json, "index", user_index);
+            cJSON_AddStringToObject(json, "address", signal.address.c_str());
+            cJSON_AddStringToObject(json, "key", signal.key.c_str());
+            cJSON_AddStringToObject(json, "frequency", signal.frequency == RF_315MHZ ? "315" : "433");
+            cJSON_AddNumberToObject(json, "protocol", signal.protocol);
+            cJSON_AddNumberToObject(json, "pulse_length", signal.pulse_length);
+            cJSON_AddBoolToObject(json, "sent", true);
+            return json;
         });
 
     mcp_server.AddTool("self.rf.clear_signals",

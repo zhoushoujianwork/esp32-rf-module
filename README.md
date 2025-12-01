@@ -475,6 +475,11 @@ Copyright (c) 2025 Project Contributors
 
 ## 更新日志
 
+### v0.1.7
+- **修复**：修复 `self.rf.send_by_index` 工具返回值问题
+- `send_by_index` 现在返回包含信号详细信息的 JSON 对象（index, address, key, frequency, protocol, pulse_length）
+- 修复 AI 回复中信号地址显示错误的问题（之前只返回 true，AI 需要从日志推断，容易出错）
+
 ### v0.1.6
 - **文档更新**：添加立创开源广场 PCB 设计链接和图片
 - 添加 PCB 布局图和 3D 渲染图预览
