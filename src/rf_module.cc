@@ -610,8 +610,10 @@ bool RFModule::SaveToFlash() {
         return false;
     }
     
+    // 显示用户索引：最新信号索引最大，按录入顺序递增
+    uint8_t user_index = flash_signal_count_;
     ESP_LOGI(TAG, "[闪存] 信号已保存到索引 %d (共%d个信号)", 
-             (flash_signal_index_ - 1 + MAX_FLASH_SIGNALS) % MAX_FLASH_SIGNALS, 
+             user_index, 
              flash_signal_count_);
     return true;
 }

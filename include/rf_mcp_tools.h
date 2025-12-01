@@ -476,13 +476,11 @@ inline void RegisterRFMcpTools(RFModule* rf_module) {
         "此工具重播/发送最近复制的信号。"
         "重要：复制/克隆信号需要两个步骤：(1) self.rf.copy - 复制信号，(2) self.rf.replay - 发送/重播信号。"
         "只有完成这两个步骤后，信号才被复制/克隆。"
-        "可以选择更改重播频率（例如，以433MHz重播315MHz信号）。"
+ "信号按原始频率重播，不支持修改频率。"
         "信号默认发送3次（行业标准）。"
         "注意：如果要重播较旧的信号，请使用 self.rf.list_signals 查找其索引，然后使用 self.rf.send_by_index。"
-        "参数：frequency（可选，如果未提供则使用原始频率，\"315\" 或 \"433\"）",
-        PropertyList({
-            Property("frequency", kPropertyTypeString, "")  // 使用空字符串作为默认值，表示使用原始频率
-        }),
+        "参数：无",
+        PropertyList(),
         [rf_module](const PropertyList& properties) -> ReturnValue {
             RFSignal signal;
             bool has_signal = false;
@@ -510,33 +508,9 @@ inline void RegisterRFMcpTools(RFModule* rf_module) {
                 throw std::runtime_error("No captured or received signal available");
             }
             
-            // 检查是否提供了 frequency 参数（空字符串表示使用原始频率）
-            RFFrequency freq = signal.frequency;  // 默认使用原始信号的频率
-            try {
-                auto freq_str = properties["frequency"].value<std::string>();
-                if (!freq_str.empty()) {
-                    // 如果提供了非空参数，使用用户指定的频率
-                    if (freq_str == "315") {
-                        freq = RF_315MHZ;
-                        ESP_LOGI(TAG_RF_MCP, "[重播] 频率已改为: 315MHz");
-                    } else if (freq_str == "433") {
-                        freq = RF_433MHZ;
-                        ESP_LOGI(TAG_RF_MCP, "[重播] 频率已改为: 433MHz");
-                    }
-                    // 如果提供了其他值，保持使用原始频率
-                } else {
-                    ESP_LOGI(TAG_RF_MCP, "[重播] 使用原始频率: %sMHz", 
-                            signal.frequency == RF_315MHZ ? "315" : "433");
-                }
-            } catch (...) {
-                // 参数不存在，使用原始频率
-                ESP_LOGI(TAG_RF_MCP, "[重播] 参数不存在，使用原始频率: %sMHz", 
-                        signal.frequency == RF_315MHZ ? "315" : "433");
-            }
-            
-            signal.frequency = freq;
-            ESP_LOGI(TAG_RF_MCP, "[重播] 最终发送频率: %sMHz", 
-                    freq == RF_315MHZ ? "315" : "433");
+            // 按原始频率发送，不支持修改频率
+            ESP_LOGI(TAG_RF_MCP, "[重播] 使用原始频率: %sMHz", 
+                    signal.frequency == RF_315MHZ ? "315" : "433");
             rf_module->Send(signal);
             return true;
         });
@@ -609,13 +583,12 @@ inline void RegisterRFMcpTools(RFModule* rf_module) {
         "最新信号位于索引1，较旧的信号索引更大。"
         "使用 self.rf.list_signals 查看所有可用信号（最多10个）及其索引。"
         "信号默认发送3次（行业标准）。"
-        "可以选择更改发送频率（例如，以433MHz发送315MHz信号）。"
+        "信号按原始频率发送，不支持修改频率。"
         "注意：闪存最多可保存10个信号（循环缓冲区）。"
         "如果尝试发送不存在的索引，会抛出错误。"
-        "参数：index（整数，1-based，必需，范围：1到saved_signals_count）、frequency（可选，\"315\" 或 \"433\"，默认：使用原始频率）",
+        "参数：index（整数，1-based，必需，范围：1到saved_signals_count）",
         PropertyList({
-            Property("index", kPropertyTypeInteger),
-            Property("frequency", kPropertyTypeString)
+            Property("index", kPropertyTypeInteger)
         }),
         [rf_module](const PropertyList& properties) -> ReturnValue {
             // Check if flash storage is enabled
@@ -652,19 +625,7 @@ inline void RegisterRFMcpTools(RFModule* rf_module) {
                     signal.frequency == RF_315MHZ ? "315" : "433",
                     signal.protocol, signal.pulse_length);
             
-            // Check if user wants to change frequency
-            try {
-                auto freq_str = properties["frequency"].value<std::string>();
-                if (freq_str == "315") {
-                    signal.frequency = RF_315MHZ;
-                } else if (freq_str == "433") {
-                    signal.frequency = RF_433MHZ;
-                }
-                ESP_LOGI(TAG_RF_MCP, "[按索引发送] 频率已改为: %sMHz", freq_str.c_str());
-            } catch (...) {
-                // frequency parameter not provided, use original frequency
-            }
-            
+            // 按原始频率发送，不支持修改频率
             rf_module->Send(signal);
             
             // 返回信号详细信息，而不是只返回 true
