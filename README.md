@@ -436,6 +436,11 @@ Copyright (c) 2025 Project Contributors
 
 ## 更新日志
 
+### v0.1.5
+- **修复**：修复 CMakeLists.txt 中 `add_compile_definitions` 命令在 ESP-IDF 组件构建阶段不可用的问题
+- 将编译定义设置改为使用 `target_compile_definitions`，并在 `idf_component_register` 之后调用
+- 确保与 ESP-IDF 5.4+ 的兼容性
+
 ### v0.1.4
 - **重大变更**：移除组件内部的 Kconfig 配置，改为通过主项目的 Kconfig.projbuild 配置
 - 解决组件库 Kconfig 导致的构建问题
