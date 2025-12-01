@@ -475,6 +475,11 @@ Copyright (c) 2025 Project Contributors
 
 ## 更新日志
 
+### v0.1.6
+- **文档更新**：添加立创开源广场 PCB 设计链接和图片
+- 添加 PCB 布局图和 3D 渲染图预览
+- 完善硬件设计说明文档
+
 ### v0.1.5
 - **修复**：修复 CMakeLists.txt 中 `add_compile_definitions` 命令在 ESP-IDF 组件构建阶段不可用的问题
 - 将编译定义设置改为使用 `target_compile_definitions`，并在 `idf_component_register` 之后调用
