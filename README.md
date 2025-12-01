@@ -485,6 +485,8 @@ Copyright (c) 2025 Project Contributors
 - 最新录入的信号索引最大，第一个录入的信号索引为1
 - 修复 `list_signals`、`send_by_index` 和 `CheckDuplicateSignal` 中的索引计算逻辑
 - 确保索引编号符合常规递增设定
+- **重构**：将 MCP 工具 `self.rf.receive` 重命名为 `self.rf.copy`，更符合复制/克隆信号的语义
+- 更新所有相关描述和日志信息，统一使用"复制/克隆"术语
 
 ### v0.1.6
 - **文档更新**：添加立创开源广场 PCB 设计链接和图片
