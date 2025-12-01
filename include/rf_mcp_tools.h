@@ -546,7 +546,7 @@ inline void RegisterRFMcpTools(RFModule* rf_module) {
         "返回：total_count（实际保存的信号数量，最多10个）和signals数组。"
         "闪存使用循环缓冲区，最大容量为10个信号。"
         "当缓冲区满时，新信号会覆盖最旧的信号。"
-        "最新信号位于索引1，较旧的信号索引更大。"
+        "信号索引按录入顺序递增：第一个录入的信号索引为1，最新录入的信号索引最大。"
         "重复信号（地址+按键+频率相同）在接收时会被检测并警告，但仍会保存。"
         "使用此工具查看所有保存的信号，然后通过 self.rf.send_by_index 按索引发送特定信号。"
         "数组中的每个信号包括：index（1-based）、address、key、frequency、protocol和pulse_length。"
@@ -575,10 +575,10 @@ inline void RegisterRFMcpTools(RFModule* rf_module) {
                 for (uint8_t i = 0; i < flash_count; i++) {
                     RFSignal signal;
                     if (rf_module->GetFlashSignal(i, signal)) {
-                        // 用户看到的索引是从1开始的（1-based），最新的信号索引最大
+                        // 用户看到的索引是从1开始的（1-based），按录入顺序递增
                         // GetFlashSignal(i=0) 返回最新的信号，所以 user_index = flash_count - i
-                        // 例如：如果有2个信号，最新的(i=0)索引为2，旧的(i=1)索引为1
-                        uint8_t user_index = flash_count - i;  // 最新的信号索引最大
+                        // 例如：如果有7个信号，最新的(i=0)索引为7，最旧的(i=6)索引为1
+                        uint8_t user_index = flash_count - i;  // 最新信号索引最大，按录入顺序递增
                         
                         ESP_LOGI(TAG_RF_MCP, "[列表] 信号[%d]: %s%s (%sMHz, 协议:%d, 脉冲:%dμs)", 
                                 user_index, signal.address.c_str(), signal.key.c_str(),
@@ -635,8 +635,9 @@ inline void RegisterRFMcpTools(RFModule* rf_module) {
             }
             
             // Convert 1-based user index to 0-based internal index
-            // Latest signal has the largest user index (flash_count), which is index 0 (internal)
-            // GetFlashSignal(i=0) returns the latest signal
+            // 用户索引按录入顺序递增：第一个录入的信号索引为1，最新录入的信号索引最大
+            // GetFlashSignal(i=0) 返回最新的信号，对应用户索引 flash_count
+            // GetFlashSignal(i=flash_count-1) 返回最旧的信号，对应用户索引 1
             // user_index = flash_count -> internal_index = 0 (latest)
             // user_index = 1 -> internal_index = flash_count - 1 (oldest)
             uint8_t internal_index = flash_count - user_index;

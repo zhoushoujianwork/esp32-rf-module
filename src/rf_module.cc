@@ -830,9 +830,9 @@ bool RFModule::CheckDuplicateSignal(const RFSignal& signal, uint8_t& duplicate_i
             if (stored_signal.address == signal.address &&
                 stored_signal.key == signal.key &&
                 stored_signal.frequency == signal.frequency) {
-                // 与 list_signals 保持一致：最新信号索引最大
-                // GetFlashSignal(i=0) 返回最新的信号，对应索引 flash_signal_count_
-                // GetFlashSignal(i=1) 返回第二新的信号，对应索引 flash_signal_count_ - 1
+                // 与 list_signals 保持一致：索引按录入顺序递增，最新信号索引最大
+                // GetFlashSignal(i=0) 返回最新的信号，对应用户索引 flash_signal_count_
+                // GetFlashSignal(i=1) 返回第二新的信号，对应用户索引 flash_signal_count_ - 1
                 duplicate_index = flash_signal_count_ - i;  // 1-based index for user
                 return true;
             }
