@@ -25,6 +25,7 @@ struct RFSignal {
     RFFrequency frequency;    // 频率类型
     uint8_t protocol;        // 协议编号
     uint16_t pulse_length;    // 脉冲长度（微秒）
+    std::string name;         // 信号主题/名称（如"卧室灯开关"、"空调开关"）
     
     RFSignal() : frequency(RF_433MHZ), protocol(1), pulse_length(320) {}
 };
@@ -63,6 +64,7 @@ public:
     bool IsCaptureMode() const { return capture_mode_; }
     bool HasCapturedSignal() const { return has_captured_signal_; }
     RFSignal GetCapturedSignal() const { return captured_signal_; }
+    void SetCapturedSignalName(const std::string& name);  // Set name for captured signal
     void ClearCapturedSignal();
     
     // Statistics
@@ -96,6 +98,7 @@ public:
     bool ClearFlashSignal(uint8_t index);  // Clear a single signal by index (0-based, internal index)
     uint8_t GetFlashSignalCount() const { return flash_signal_count_; }
     bool GetFlashSignal(uint8_t index, RFSignal& signal) const;
+    bool UpdateFlashSignalName(uint8_t index, const std::string& name);  // Update name for a signal by index (0-based, internal index)
     bool IsFlashStorageEnabled() const { return flash_storage_enabled_; }
     bool CheckDuplicateSignal(const RFSignal& signal, uint8_t& duplicate_index) const;  // Check if signal already exists in flash storage
     

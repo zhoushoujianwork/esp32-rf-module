@@ -21,3 +21,6 @@ managed_components/
 # Component manager
 dist/
 
+# Output files
+out
+

@@ -9,6 +9,9 @@ ESP32 RF 收发模块库，支持 315MHz 和 433MHz 双频段 RF 信号收发。
 - ✅ 支持 315MHz 和 433MHz 双频段收发
 - ✅ 信号捕获和重放
 - ✅ 信号持久化存储（NVS Flash，最多10个信号）
+- ✅ **信号名称/主题管理**：支持为信号设置设备名称（如"卧室灯开关"、"大门开"等）
+- ✅ **按名称发送**：支持通过设备名称发送信号，无需记忆索引
+- ✅ **自然语言支持**：AI 可从自然语言中提取设备名称（如"录制大门信号"→"大门"）
 - ✅ MCP 工具集成，支持 AI 对话控制
 
 ## 硬件连接
@@ -38,7 +41,7 @@ ESP32 RF 收发模块库，支持 315MHz 和 433MHz 双频段 RF 信号收发。
 
 ```yaml
 dependencies:
-  zhoushoujianwork/esp32-rf-module: "^0.1.9"
+  zhoushoujianwork/esp32-rf-module: "^0.1.11"
 ```
 
 ## 配置
@@ -64,14 +67,16 @@ config BOARD_HAS_RF_PINS
 
 本库提供以下 MCP 工具，支持通过 AI 对话控制：
 
-1. **self.rf.copy** - 复制/克隆RF信号
+1. **self.rf.copy** - 复制/克隆RF信号（支持设置设备名称）
 2. **self.rf.replay** - 重播最后复制的信号
 3. **self.rf.send** - 发送RF信号
-4. **self.rf.list_signals** - 列出所有保存的信号
+4. **self.rf.list_signals** - 列出所有保存的信号（包含设备名称）
 5. **self.rf.send_by_index** - 按索引发送信号
-6. **self.rf.clear_signals** - 清理保存的信号
-7. **self.rf.get_status** - 获取模块状态
-8. **self.rf.set_config** - 配置模块参数
+6. **self.rf.send_by_name** - 按设备名称发送信号（新增）
+7. **self.rf.set_signal_name** - 设置信号设备名称（新增）
+8. **self.rf.clear_signals** - 清理保存的信号
+9. **self.rf.get_status** - 获取模块状态
+10. **self.rf.set_config** - 配置模块参数
 
 ## 运行示例
 
@@ -141,6 +146,16 @@ if (rf_module.ReceiveAvailable()) {
 MIT License
 
 ## 更新日志
+
+### v0.1.11
+- **新增**：信号名称/主题管理功能
+  - 为 `RFSignal` 结构体添加 `name` 字段，支持设备名称（如"卧室灯开关"、"大门开"等）
+  - `self.rf.copy` 工具支持可选的 `name` 参数，复制时可直接设置设备名称
+  - 新增 `self.rf.set_signal_name` 工具，支持按索引设置信号名称
+  - 新增 `self.rf.send_by_name` 工具，支持按设备名称发送信号
+  - 所有返回信号信息的工具（`list_signals`、`send_by_index`、`get_status` 等）都包含 `name` 字段
+  - 支持自然语言提取设备名称（如"录制大门信号"→"大门"、"复制卧室灯开关"→"卧室灯开关"）
+  - 向后兼容：旧数据自动处理，未设置名称的信号显示为空字符串
 
 ### v0.1.10
 - **修复**：修复保存索引显示问题，显示用户索引（最新信号索引最大）而不是内部存储索引

@@ -458,6 +458,12 @@ void RFModule::DisableCaptureMode() {
     capture_mode_ = false;
 }
 
+void RFModule::SetCapturedSignalName(const std::string& name) {
+    if (has_captured_signal_) {
+        captured_signal_.name = name;
+    }
+}
+
 void RFModule::ClearCapturedSignal() {
     has_captured_signal_ = false;
     captured_signal_ = RFSignal();
@@ -576,6 +582,7 @@ bool RFModule::SaveToFlash() {
     std::string freq_key = std::string(key_prefix) + "freq";
     std::string proto_key = std::string(key_prefix) + "proto";
     std::string pulse_key = std::string(key_prefix) + "pulse";
+    std::string name_key = std::string(key_prefix) + "name";
     
     err = nvs_set_str(nvs_handle_, addr_key.c_str(), captured_signal_.address.c_str());
     if (err != ESP_OK) {
@@ -592,6 +599,14 @@ bool RFModule::SaveToFlash() {
     nvs_set_u8(nvs_handle_, freq_key.c_str(), captured_signal_.frequency);
     nvs_set_u8(nvs_handle_, proto_key.c_str(), captured_signal_.protocol);
     nvs_set_u16(nvs_handle_, pulse_key.c_str(), captured_signal_.pulse_length);
+    
+    // Save name field (empty string if not set)
+    err = nvs_set_str(nvs_handle_, name_key.c_str(), 
+                      captured_signal_.name.empty() ? "" : captured_signal_.name.c_str());
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to save name: %s", esp_err_to_name(err));
+        return false;
+    }
     
     // Update circular buffer index and count
     flash_signal_index_ = (flash_signal_index_ + 1) % MAX_FLASH_SIGNALS;
@@ -652,6 +667,7 @@ bool RFModule::LoadFromFlash() {
     std::string freq_key = std::string(key_prefix) + "freq";
     std::string proto_key = std::string(key_prefix) + "proto";
     std::string pulse_key = std::string(key_prefix) + "pulse";
+    std::string name_key = std::string(key_prefix) + "name";
     
     size_t required_size = 0;
     err = nvs_get_str(nvs_handle_, addr_key.c_str(), nullptr, &required_size);
@@ -676,15 +692,31 @@ bool RFModule::LoadFromFlash() {
                     nvs_get_u8(nvs_handle_, proto_key.c_str(), &captured_signal_.protocol);
                     nvs_get_u16(nvs_handle_, pulse_key.c_str(), &captured_signal_.pulse_length);
                     
+                    // Read name field (backward compatible: if not exists, default to empty string)
+                    required_size = 0;
+                    err = nvs_get_str(nvs_handle_, name_key.c_str(), nullptr, &required_size);
+                    if (err == ESP_OK && required_size > 0) {
+                        char* name_buf = new char[required_size];
+                        err = nvs_get_str(nvs_handle_, name_key.c_str(), name_buf, &required_size);
+                        if (err == ESP_OK) {
+                            captured_signal_.name = name_buf;
+                        }
+                        delete[] name_buf;
+                    } else {
+                        // Name field doesn't exist (old data), default to empty string
+                        captured_signal_.name = "";
+                    }
+                    
                     delete[] key_buf;
                     delete[] addr_buf;
                     
                     if (!captured_signal_.address.empty() && !captured_signal_.key.empty()) {
                         has_captured_signal_ = true;
-                        ESP_LOGI(TAG, "[闪存] 已加载信号: %s%s (%sMHz, 共%d个信号)", 
+                        ESP_LOGI(TAG, "[闪存] 已加载信号: %s%s (%sMHz, 共%d个信号%s)", 
                                 captured_signal_.address.c_str(), captured_signal_.key.c_str(),
                                 captured_signal_.frequency == RF_315MHZ ? "315" : "433",
-                                flash_signal_count_);
+                                flash_signal_count_,
+                                captured_signal_.name.empty() ? "" : (", 名称:" + captured_signal_.name).c_str());
                         return true;
                     }
                 } else {
@@ -713,6 +745,7 @@ void RFModule::ClearFlash() {
         nvs_erase_key(nvs_handle_, (std::string(key_prefix) + "freq").c_str());
         nvs_erase_key(nvs_handle_, (std::string(key_prefix) + "proto").c_str());
         nvs_erase_key(nvs_handle_, (std::string(key_prefix) + "pulse").c_str());
+        nvs_erase_key(nvs_handle_, (std::string(key_prefix) + "name").c_str());
     }
     
     // Clear metadata
@@ -743,6 +776,7 @@ bool RFModule::ClearFlashSignal(uint8_t index) {
     nvs_erase_key(nvs_handle_, (std::string(key_prefix) + "freq").c_str());
     nvs_erase_key(nvs_handle_, (std::string(key_prefix) + "proto").c_str());
     nvs_erase_key(nvs_handle_, (std::string(key_prefix) + "pulse").c_str());
+    nvs_erase_key(nvs_handle_, (std::string(key_prefix) + "name").c_str());
     
     // Update count
     if (flash_signal_count_ > 0) {
@@ -782,6 +816,7 @@ bool RFModule::GetFlashSignal(uint8_t index, RFSignal& signal) const {
     std::string freq_key = std::string(key_prefix) + "freq";
     std::string proto_key = std::string(key_prefix) + "proto";
     std::string pulse_key = std::string(key_prefix) + "pulse";
+    std::string name_key = std::string(key_prefix) + "name";
     
     size_t required_size = 0;
     esp_err_t err = nvs_get_str(nvs_handle_, addr_key.c_str(), nullptr, &required_size);
@@ -806,6 +841,21 @@ bool RFModule::GetFlashSignal(uint8_t index, RFSignal& signal) const {
                     nvs_get_u8(nvs_handle_, proto_key.c_str(), &signal.protocol);
                     nvs_get_u16(nvs_handle_, pulse_key.c_str(), &signal.pulse_length);
                     
+                    // Read name field (backward compatible: if not exists, default to empty string)
+                    required_size = 0;
+                    err = nvs_get_str(nvs_handle_, name_key.c_str(), nullptr, &required_size);
+                    if (err == ESP_OK && required_size > 0) {
+                        char* name_buf = new char[required_size];
+                        err = nvs_get_str(nvs_handle_, name_key.c_str(), name_buf, &required_size);
+                        if (err == ESP_OK) {
+                            signal.name = name_buf;
+                        }
+                        delete[] name_buf;
+                    } else {
+                        // Name field doesn't exist (old data), default to empty string
+                        signal.name = "";
+                    }
+                    
                     delete[] key_buf;
                     delete[] addr_buf;
                     return true;
@@ -817,6 +867,37 @@ bool RFModule::GetFlashSignal(uint8_t index, RFSignal& signal) const {
     }
     
     return false;
+}
+
+bool RFModule::UpdateFlashSignalName(uint8_t index, const std::string& name) {
+    // index is 0-based internal index (0 = latest signal)
+    if (!flash_storage_enabled_ || nvs_handle_ == 0 || index >= flash_signal_count_) {
+        return false;
+    }
+    
+    // Calculate the actual index in the circular buffer
+    uint8_t actual_index = (flash_signal_index_ - 1 - index + MAX_FLASH_SIGNALS) % MAX_FLASH_SIGNALS;
+    
+    // Update name field
+    char key_prefix[32];
+    snprintf(key_prefix, sizeof(key_prefix), "sig_%d_", actual_index);
+    std::string name_key = std::string(key_prefix) + "name";
+    
+    esp_err_t err = nvs_set_str(nvs_handle_, name_key.c_str(), name.c_str());
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to update signal name: %s", esp_err_to_name(err));
+        return false;
+    }
+    
+    err = nvs_commit(nvs_handle_);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to commit NVS: %s", esp_err_to_name(err));
+        return false;
+    }
+    
+    uint8_t user_index = flash_signal_count_ - index;  // Convert to 1-based user index
+    ESP_LOGI(TAG, "[闪存] 已更新信号索引 %d 的名称: %s", user_index, name.c_str());
+    return true;
 }
 
 bool RFModule::CheckDuplicateSignal(const RFSignal& signal, uint8_t& duplicate_index) const {

@@ -65,7 +65,7 @@ inline void RegisterRFMcpTools(RFModule* rf_module) {
         "所有接收到的信号都会自动保存到闪存（最多10个信号，循环缓冲区）。"
         "这是一个阻塞调用，最多等待10秒接收信号。"
         "返回值说明："
-        "- 成功接收信号：返回JSON对象，包含address, key, frequency, protocol, pulse_length, is_duplicate=false。"
+        "- 成功接收信号：返回JSON对象，包含address, key, frequency, protocol, pulse_length, name, is_duplicate=false。"
         "- 检测到重复信号：工具会抛出异常（error响应），错误消息为'信号保存失败：检测到重复信号...'，此时信号不会被保存。这不是超时，而是重复信号错误。"
         "- 超时未接收到信号：返回null（不是error响应）。"
         "重要：如果工具返回error响应，说明检测到重复信号或存储已满，错误消息会详细说明原因。如果返回null，说明超时未接收到信号。"
@@ -73,16 +73,32 @@ inline void RegisterRFMcpTools(RFModule* rf_module) {
         "仅复制信号并不等于完成克隆，必须同时调用 self.rf.replay 才能完成克隆操作。"
         "使用 self.rf.get_status 可以非阻塞查询最新接收的信号。"
         "使用 self.rf.list_signals 可以查看所有保存的信号（最多10个）及其索引。"
-        "参数：timeout_ms（可选，默认10000）",
+        "设备名称提取："
+        "- 当用户说\"录制大门信号\"、\"复制大门信号\"、\"录制大门\"时，应提取\"大门\"作为name参数。"
+        "- 当用户说\"复制卧室灯开关\"、\"录制卧室灯开关\"时，应提取\"卧室灯开关\"作为name参数。"
+        "- 当用户说\"录制空调开关\"、\"复制空调\"时，应提取\"空调\"或\"空调开关\"作为name参数。"
+        "- 从用户的自然语言中提取设备名称，去除\"录制\"、\"复制\"、\"信号\"等动词和通用词汇，保留具体的设备名称。"
+        "参数：timeout_ms（可选，默认10000）、name（可选，字符串）- 信号主题/设备名称，从用户自然语言中提取，如\"大门\"、\"卧室灯开关\"、\"空调开关\"等。"
+        "示例：用户说\"录制大门信号\"时，name应为\"大门\"；用户说\"复制卧室灯开关\"时，name应为\"卧室灯开关\"",
         PropertyList({
-            Property("timeout_ms", kPropertyTypeInteger, 10000)
+            Property("timeout_ms", kPropertyTypeInteger, 10000),
+            Property("name", kPropertyTypeString, "")
         }),
         [rf_module](const PropertyList& properties) -> ReturnValue {
             // timeout_ms 有默认值10000，如果用户提供了值会被覆盖
             int timeout_ms = properties["timeout_ms"].value<int>();
+            // name 有默认值空字符串，如果用户提供了值会被覆盖
+            std::string signal_name = "";
+            try {
+                signal_name = properties["name"].value<std::string>();
+            } catch (...) {
+                // name not provided, use empty string
+            }
+            
             int64_t start_time = esp_timer_get_time();
             
-            ESP_LOGI(TAG_RF_MCP, "[复制] 开始等待RF信号，超时时间: %dms", timeout_ms);
+            ESP_LOGI(TAG_RF_MCP, "[复制] 开始等待RF信号，超时时间: %dms%s", 
+                    timeout_ms, signal_name.empty() ? "" : (", 信号名称: " + signal_name).c_str());
             
             // 先清空已处理的信号，避免主循环重复处理
             // 如果已有信号，先处理掉（避免重复保存）
@@ -95,6 +111,12 @@ inline void RegisterRFMcpTools(RFModule* rf_module) {
             if (rf_module->ReceiveAvailable()) {
                 RFSignal signal;
                 if (rf_module->Receive(signal)) {
+                    // Set signal name if provided
+                    if (!signal_name.empty()) {
+                        rf_module->SetCapturedSignalName(signal_name);
+                        signal.name = signal_name;
+                    }
+                    
                     // Explicitly save to flash storage for self.rf.copy tool
                     // Check if storage is full before saving
                     if (rf_module->IsFlashStorageEnabled()) {
@@ -117,9 +139,10 @@ inline void RegisterRFMcpTools(RFModule* rf_module) {
                                 signal.address.c_str(), signal.key.c_str(),
                                 signal.frequency == RF_315MHZ ? "315" : "433", duplicate_index);
                     } else {
-                        ESP_LOGI(TAG_RF_MCP, "[复制] 立即接收到信号: %s%s (%sMHz)", 
+                        ESP_LOGI(TAG_RF_MCP, "[复制] 立即接收到信号: %s%s (%sMHz)%s", 
                                 signal.address.c_str(), signal.key.c_str(),
-                                signal.frequency == RF_315MHZ ? "315" : "433");
+                                signal.frequency == RF_315MHZ ? "315" : "433",
+                                signal.name.empty() ? "" : (", 名称: " + signal.name).c_str());
                     }
                     
                     cJSON* json = cJSON_CreateObject();
@@ -128,6 +151,7 @@ inline void RegisterRFMcpTools(RFModule* rf_module) {
                     cJSON_AddStringToObject(json, "frequency", signal.frequency == RF_315MHZ ? "315" : "433");
                     cJSON_AddNumberToObject(json, "protocol", signal.protocol);
                     cJSON_AddNumberToObject(json, "pulse_length", signal.pulse_length);
+                    cJSON_AddStringToObject(json, "name", signal.name.empty() ? "" : signal.name.c_str());
                     if (is_duplicate) {
                         cJSON_AddBoolToObject(json, "is_duplicate", true);
                         cJSON_AddNumberToObject(json, "duplicate_index", duplicate_index);
@@ -143,6 +167,12 @@ inline void RegisterRFMcpTools(RFModule* rf_module) {
                 if (rf_module->ReceiveAvailable()) {
             RFSignal signal;
             if (rf_module->Receive(signal)) {
+                        // Set signal name if provided
+                        if (!signal_name.empty()) {
+                            rf_module->SetCapturedSignalName(signal_name);
+                            signal.name = signal_name;
+                        }
+                        
                         // Check for duplicate signal BEFORE saving
                         uint8_t duplicate_index = 0;
                         bool is_duplicate = rf_module->CheckDuplicateSignal(signal, duplicate_index);
@@ -160,6 +190,7 @@ inline void RegisterRFMcpTools(RFModule* rf_module) {
                             cJSON_AddStringToObject(json, "frequency", signal.frequency == RF_315MHZ ? "315" : "433");
                             cJSON_AddNumberToObject(json, "protocol", signal.protocol);
                             cJSON_AddNumberToObject(json, "pulse_length", signal.pulse_length);
+                            cJSON_AddStringToObject(json, "name", signal.name.empty() ? "" : signal.name.c_str());
                             cJSON_AddBoolToObject(json, "is_duplicate", true);
                             cJSON_AddNumberToObject(json, "duplicate_index", duplicate_index);
                             return json;
@@ -180,10 +211,11 @@ inline void RegisterRFMcpTools(RFModule* rf_module) {
                         }
                         
                         int64_t elapsed_ms = (esp_timer_get_time() - start_time) / 1000;
-                        ESP_LOGI(TAG_RF_MCP, "[复制] ✓ 复制信号成功: %s%s (%sMHz, 协议:%d, 脉冲:%dμs, 等待时间:%ldms)", 
+                        ESP_LOGI(TAG_RF_MCP, "[复制] ✓ 复制信号成功: %s%s (%sMHz, 协议:%d, 脉冲:%dμs, 等待时间:%ldms)%s", 
                                 signal.address.c_str(), signal.key.c_str(),
                                 signal.frequency == RF_315MHZ ? "315" : "433",
-                                signal.protocol, signal.pulse_length, (long)elapsed_ms);
+                                signal.protocol, signal.pulse_length, (long)elapsed_ms,
+                                signal.name.empty() ? "" : (", 名称: " + signal.name).c_str());
                         
                 cJSON* json = cJSON_CreateObject();
                 cJSON_AddStringToObject(json, "address", signal.address.c_str());
@@ -191,6 +223,7 @@ inline void RegisterRFMcpTools(RFModule* rf_module) {
                 cJSON_AddStringToObject(json, "frequency", signal.frequency == RF_315MHZ ? "315" : "433");
                 cJSON_AddNumberToObject(json, "protocol", signal.protocol);
                 cJSON_AddNumberToObject(json, "pulse_length", signal.pulse_length);
+                cJSON_AddStringToObject(json, "name", signal.name.empty() ? "" : signal.name.c_str());
                 cJSON_AddBoolToObject(json, "is_duplicate", false);  // 保存成功，不是重复
                 return json;
                     }
@@ -209,7 +242,7 @@ inline void RegisterRFMcpTools(RFModule* rf_module) {
         "saved_signals_count字段显示闪存中实际保存的信号数量（最多10个，循环缓冲区）。"
         "使用此工具可以快速检查模块状态和最新信号，无需阻塞。"
         "注意：要列出所有保存的信号及其索引，请使用 self.rf.list_signals。"
-        "last_signal字段包含最新信号（address, key, frequency, protocol, pulse_length）。"
+        "last_signal字段包含最新信号（address, key, frequency, protocol, pulse_length, name）。"
         "此工具不会返回完整的保存信号列表，请使用 self.rf.list_signals 查看。"
         "重复信号（地址+按键+频率相同）会被检测并警告，但仍会保存到闪存。",
         PropertyList(),
@@ -227,6 +260,7 @@ inline void RegisterRFMcpTools(RFModule* rf_module) {
                 cJSON_AddStringToObject(last, "frequency", last_signal.frequency == RF_315MHZ ? "315" : "433");
                 cJSON_AddNumberToObject(last, "protocol", last_signal.protocol);
                 cJSON_AddNumberToObject(last, "pulse_length", last_signal.pulse_length);
+                cJSON_AddStringToObject(last, "name", last_signal.name.empty() ? "" : last_signal.name.c_str());
                 cJSON_AddItemToObject(json, "last_signal", last);
             }
             
@@ -297,6 +331,7 @@ inline void RegisterRFMcpTools(RFModule* rf_module) {
                     cJSON_AddStringToObject(json, "frequency", signal.frequency == RF_315MHZ ? "315" : "433");
                     cJSON_AddNumberToObject(json, "protocol", signal.protocol);
                     cJSON_AddNumberToObject(json, "pulse_length", signal.pulse_length);
+                    cJSON_AddStringToObject(json, "name", signal.name.empty() ? "" : signal.name.c_str());
                     cJSON_AddBoolToObject(json, "is_duplicate", true);
                     cJSON_AddNumberToObject(json, "duplicate_index", duplicate_index);
                     return json;
@@ -336,6 +371,7 @@ inline void RegisterRFMcpTools(RFModule* rf_module) {
                 cJSON_AddStringToObject(json, "frequency", signal.frequency == RF_315MHZ ? "315" : "433");
                 cJSON_AddNumberToObject(json, "protocol", signal.protocol);
                 cJSON_AddNumberToObject(json, "pulse_length", signal.pulse_length);
+                cJSON_AddStringToObject(json, "name", signal.name.empty() ? "" : signal.name.c_str());
                 cJSON_AddBoolToObject(json, "is_duplicate", false);  // 保存成功，不是重复
                 return json;
             }
@@ -523,7 +559,7 @@ inline void RegisterRFMcpTools(RFModule* rf_module) {
         "信号索引按录入顺序递增：第一个录入的信号索引为1，最新录入的信号索引最大。"
         "重复信号（地址+按键+频率相同）在接收时会被检测并警告，但仍会保存。"
         "使用此工具查看所有保存的信号，然后通过 self.rf.send_by_index 按索引发送特定信号。"
-        "数组中的每个信号包括：index（1-based）、address、key、frequency、protocol和pulse_length。"
+        "数组中的每个信号包括：index（1-based）、address、key、frequency、protocol、pulse_length和name（设备名称，如果未设置则为空字符串）。"
         "参数：无",
         PropertyList(),
         [rf_module](const PropertyList& properties) -> ReturnValue {
@@ -554,10 +590,11 @@ inline void RegisterRFMcpTools(RFModule* rf_module) {
                         // 例如：如果有7个信号，最新的(i=0)索引为7，最旧的(i=6)索引为1
                         uint8_t user_index = flash_count - i;  // 最新信号索引最大，按录入顺序递增
                         
-                        ESP_LOGI(TAG_RF_MCP, "[列表] 信号[%d]: %s%s (%sMHz, 协议:%d, 脉冲:%dμs)", 
+                        ESP_LOGI(TAG_RF_MCP, "[列表] 信号[%d]: %s%s (%sMHz, 协议:%d, 脉冲:%dμs%s)", 
                                 user_index, signal.address.c_str(), signal.key.c_str(),
                                 signal.frequency == RF_315MHZ ? "315" : "433",
-                                signal.protocol, signal.pulse_length);
+                                signal.protocol, signal.pulse_length,
+                                signal.name.empty() ? " (未命名)" : (", 名称: " + signal.name).c_str());
                         
                         cJSON* sig_obj = cJSON_CreateObject();
                         cJSON_AddNumberToObject(sig_obj, "index", user_index);  // 1-based index for user
@@ -566,6 +603,7 @@ inline void RegisterRFMcpTools(RFModule* rf_module) {
                         cJSON_AddStringToObject(sig_obj, "frequency", signal.frequency == RF_315MHZ ? "315" : "433");
                         cJSON_AddNumberToObject(sig_obj, "protocol", signal.protocol);
                         cJSON_AddNumberToObject(sig_obj, "pulse_length", signal.pulse_length);
+                        cJSON_AddStringToObject(sig_obj, "name", signal.name.empty() ? "" : signal.name.c_str());
                         cJSON_AddItemToArray(signals, sig_obj);
                     }
                 }
@@ -620,10 +658,11 @@ inline void RegisterRFMcpTools(RFModule* rf_module) {
                 throw std::runtime_error("Failed to retrieve signal at index " + std::to_string(user_index));
             }
             
-            ESP_LOGI(TAG_RF_MCP, "[按索引发送] 发送信号[%d]: %s%s (%sMHz, 协议:%d, 脉冲:%dμs)", 
+            ESP_LOGI(TAG_RF_MCP, "[按索引发送] 发送信号[%d]: %s%s (%sMHz, 协议:%d, 脉冲:%dμs%s)", 
                     user_index, signal.address.c_str(), signal.key.c_str(),
                     signal.frequency == RF_315MHZ ? "315" : "433",
-                    signal.protocol, signal.pulse_length);
+                    signal.protocol, signal.pulse_length,
+                    signal.name.empty() ? "" : (", 名称: " + signal.name).c_str());
             
             // 按原始频率发送，不支持修改频率
             rf_module->Send(signal);
@@ -636,6 +675,154 @@ inline void RegisterRFMcpTools(RFModule* rf_module) {
             cJSON_AddStringToObject(json, "frequency", signal.frequency == RF_315MHZ ? "315" : "433");
             cJSON_AddNumberToObject(json, "protocol", signal.protocol);
             cJSON_AddNumberToObject(json, "pulse_length", signal.pulse_length);
+            cJSON_AddStringToObject(json, "name", signal.name.empty() ? "" : signal.name.c_str());
+            cJSON_AddBoolToObject(json, "sent", true);
+            return json;
+        });
+
+    mcp_server.AddTool("self.rf.set_signal_name",
+        "按索引设置已保存信号的名称/主题（1-based）。"
+        "使用 self.rf.list_signals 查看所有可用信号（最多10个）及其索引。"
+        "设置名称后，可以通过 self.rf.send_by_name 按名称发送信号。"
+        "如果 name 为空字符串，将清除信号名称。"
+        "如果尝试设置不存在的索引，会抛出错误。"
+        "设备名称提取："
+        "- 当用户说\"把信号1命名为大门\"、\"设置信号1名称为大门\"时，应提取\"大门\"作为name参数。"
+        "- 当用户说\"把索引2设置为卧室灯开关\"时，应提取\"卧室灯开关\"作为name参数。"
+        "- 从用户的自然语言中提取设备名称，去除\"命名为\"、\"设置为\"、\"名称\"等动词和通用词汇，保留具体的设备名称。"
+        "参数：index（整数，1-based，必需，范围：1到saved_signals_count）、name（字符串，必需）- 信号名称/设备名称，从用户自然语言中提取，如\"大门\"、\"卧室灯开关\"、\"空调开关\"等（空字符串可清除名称）",
+        PropertyList({
+            Property("index", kPropertyTypeInteger),
+            Property("name", kPropertyTypeString)
+        }),
+        [rf_module](const PropertyList& properties) -> ReturnValue {
+            // Check if flash storage is enabled
+            if (!rf_module->IsFlashStorageEnabled()) {
+                throw std::runtime_error("Flash storage not enabled. Cannot set signal name.");
+            }
+            
+            int user_index = properties["index"].value<int>();
+            std::string name = properties["name"].value<std::string>();
+            
+            if (user_index < 1) {
+                throw std::runtime_error("Index must be >= 1 (1-based indexing)");
+            }
+            
+            // Allow empty string to clear name
+            
+            uint8_t flash_count = rf_module->GetFlashSignalCount();
+            if (user_index > flash_count) {
+                throw std::runtime_error("Index " + std::to_string(user_index) + " exceeds available signals count (" + std::to_string(flash_count) + ")");
+            }
+            
+            // Convert 1-based user index to 0-based internal index
+            // 用户索引按录入顺序递增：第一个录入的信号索引为1，最新录入的信号索引最大
+            // GetFlashSignal(i=0) 返回最新的信号，对应用户索引 flash_count
+            // GetFlashSignal(i=flash_count-1) 返回最旧的信号，对应用户索引 1
+            // user_index = flash_count -> internal_index = 0 (latest)
+            // user_index = 1 -> internal_index = flash_count - 1 (oldest)
+            uint8_t internal_index = flash_count - user_index;
+            
+            // Get signal info before updating (for logging)
+            RFSignal signal;
+            if (!rf_module->GetFlashSignal(internal_index, signal)) {
+                throw std::runtime_error("Failed to retrieve signal at index " + std::to_string(user_index));
+            }
+            
+            if (!rf_module->UpdateFlashSignalName(internal_index, name)) {
+                throw std::runtime_error("Failed to update signal name at index " + std::to_string(user_index));
+            }
+            
+            ESP_LOGI(TAG_RF_MCP, "[设置名称] 信号[%d]: %s%s (%sMHz) -> 名称: %s", 
+                    user_index, signal.address.c_str(), signal.key.c_str(),
+                    signal.frequency == RF_315MHZ ? "315" : "433", 
+                    name.empty() ? "(已清除)" : name.c_str());
+            
+            // Return updated signal info
+            cJSON* json = cJSON_CreateObject();
+            cJSON_AddNumberToObject(json, "index", user_index);
+            cJSON_AddStringToObject(json, "address", signal.address.c_str());
+            cJSON_AddStringToObject(json, "key", signal.key.c_str());
+            cJSON_AddStringToObject(json, "frequency", signal.frequency == RF_315MHZ ? "315" : "433");
+            cJSON_AddNumberToObject(json, "protocol", signal.protocol);
+            cJSON_AddNumberToObject(json, "pulse_length", signal.pulse_length);
+            cJSON_AddStringToObject(json, "name", name.c_str());
+            cJSON_AddBoolToObject(json, "updated", true);
+            return json;
+        });
+
+    mcp_server.AddTool("self.rf.send_by_name",
+        "按名称发送已保存的RF信号。"
+        "使用 self.rf.list_signals 查看所有可用信号及其名称。"
+        "如果多个信号具有相同的名称，将发送第一个匹配的信号。"
+        "信号默认发送3次（行业标准）。"
+        "信号按原始频率发送，不支持修改频率。"
+        "如果找不到匹配的名称，会抛出错误。"
+        "设备名称提取："
+        "- 当用户说\"发送大门信号\"、\"打开大门\"、\"控制大门\"时，应提取\"大门\"作为name参数。"
+        "- 当用户说\"发送卧室灯开关\"、\"打开卧室灯\"时，应提取\"卧室灯开关\"或\"卧室灯\"作为name参数。"
+        "- 当用户说\"发送空调开关\"、\"打开空调\"时，应提取\"空调开关\"或\"空调\"作为name参数。"
+        "- 从用户的自然语言中提取设备名称，去除\"发送\"、\"打开\"、\"控制\"、\"信号\"等动词和通用词汇，保留具体的设备名称。"
+        "参数：name（字符串，必需）- 信号名称/设备名称，从用户自然语言中提取，如\"大门\"、\"卧室灯开关\"、\"空调开关\"等",
+        PropertyList({
+            Property("name", kPropertyTypeString)
+        }),
+        [rf_module](const PropertyList& properties) -> ReturnValue {
+            // Check if flash storage is enabled
+            if (!rf_module->IsFlashStorageEnabled()) {
+                throw std::runtime_error("Flash storage not enabled. Cannot send signal by name.");
+            }
+            
+            std::string name = properties["name"].value<std::string>();
+            
+            if (name.empty()) {
+                throw std::runtime_error("Name cannot be empty.");
+            }
+            
+            uint8_t flash_count = rf_module->GetFlashSignalCount();
+            if (flash_count == 0) {
+                throw std::runtime_error("No signals saved. Use self.rf.copy to save signals first.");
+            }
+            
+            // Search for signal with matching name
+            RFSignal found_signal;
+            uint8_t found_index = 0;
+            bool found = false;
+            
+            // Search from oldest to newest (index 1 to flash_count)
+            for (uint8_t i = 0; i < flash_count; i++) {
+                RFSignal signal;
+                if (rf_module->GetFlashSignal(i, signal)) {
+                    if (signal.name == name) {
+                        found_signal = signal;
+                        found_index = flash_count - i;  // Convert to 1-based user index
+                        found = true;
+                        break;  // Found first match
+                    }
+                }
+            }
+            
+            if (!found) {
+                throw std::runtime_error("No signal found with name: \"" + name + "\". Use self.rf.list_signals to see available signals.");
+            }
+            
+            ESP_LOGI(TAG_RF_MCP, "[按名称发送] 发送信号[%d]: %s%s (%sMHz, 协议:%d, 脉冲:%dμs, 名称: %s)", 
+                    found_index, found_signal.address.c_str(), found_signal.key.c_str(),
+                    found_signal.frequency == RF_315MHZ ? "315" : "433",
+                    found_signal.protocol, found_signal.pulse_length, name.c_str());
+            
+            // 按原始频率发送，不支持修改频率
+            rf_module->Send(found_signal);
+            
+            // 返回信号详细信息
+            cJSON* json = cJSON_CreateObject();
+            cJSON_AddNumberToObject(json, "index", found_index);
+            cJSON_AddStringToObject(json, "address", found_signal.address.c_str());
+            cJSON_AddStringToObject(json, "key", found_signal.key.c_str());
+            cJSON_AddStringToObject(json, "frequency", found_signal.frequency == RF_315MHZ ? "315" : "433");
+            cJSON_AddNumberToObject(json, "protocol", found_signal.protocol);
+            cJSON_AddNumberToObject(json, "pulse_length", found_signal.pulse_length);
+            cJSON_AddStringToObject(json, "name", found_signal.name.c_str());
             cJSON_AddBoolToObject(json, "sent", true);
             return json;
         });
