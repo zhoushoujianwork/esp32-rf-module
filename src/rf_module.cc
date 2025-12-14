@@ -160,7 +160,52 @@ void RFModule::Send(const std::string& address, const std::string& key, RFFreque
 }
 
 void RFModule::Send(const RFSignal& signal) {
-    Send(signal.address, signal.key, signal.frequency);
+    if (!enabled_) {
+        ESP_LOGW(TAG, "RF module not enabled");
+        return;
+    }
+    
+    send_count_++;
+    
+    // 保存当前的脉冲长度和协议配置
+    uint16_t saved_pulse_length;
+    uint8_t saved_protocol;
+    
+    if (signal.frequency == RF_315MHZ) {
+#if CONFIG_RF_MODULE_ENABLE_315MHZ
+        saved_pulse_length = pulse_length_315_;
+        saved_protocol = protocol_315_;
+        
+        // 临时使用信号中存储的脉冲长度和协议
+        pulse_length_315_ = signal.pulse_length;
+        protocol_315_ = signal.protocol;
+        
+        SendSignalTCSwitch(signal.address, signal.key);
+        
+        // 恢复原来的配置
+        pulse_length_315_ = saved_pulse_length;
+        protocol_315_ = saved_protocol;
+#else
+        ESP_LOGE(TAG, "315MHz frequency support is disabled");
+#endif // CONFIG_RF_MODULE_ENABLE_315MHZ
+    } else {
+#if CONFIG_RF_MODULE_ENABLE_433MHZ
+        saved_pulse_length = pulse_length_433_;
+        saved_protocol = protocol_433_;
+        
+        // 临时使用信号中存储的脉冲长度和协议
+        pulse_length_433_ = signal.pulse_length;
+        protocol_433_ = signal.protocol;
+        
+        SendSignalRCSwitch(signal.address, signal.key);
+        
+        // 恢复原来的配置
+        pulse_length_433_ = saved_pulse_length;
+        protocol_433_ = saved_protocol;
+#else
+        ESP_LOGE(TAG, "433MHz frequency support is disabled");
+#endif // CONFIG_RF_MODULE_ENABLE_433MHZ
+    }
 }
 
 bool RFModule::ReceiveAvailable() {

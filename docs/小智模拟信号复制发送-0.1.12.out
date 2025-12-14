@@ -1,0 +1,205 @@
+
+I (271671) CustomWakeWord: Encode wake word opus 66 packets in 413 ms
+I (271671) Application: Wake word detected: 你好汤圆
+I (271671) Application: STATE: listening
+I (271671) Application: Sending device state to K230: LISTENING
+I (271681) FaceRecognition: Sent device state to K230: LISTENING
+I (271691) Application: >> 你好汤圆
+I (271691) I2S_IF: channel mode 0 bits:16/16 channel:2 mask:1
+I (271701) I2S_IF: STD Mode 1 bits:16/16 channel:2 sample_rate:24000 mask:1
+I (271701) Adev_Codec: Open codec device OK
+I (271711) AudioCodec: Set output enable to true
+I (271711) Application: << 啊？
+I (271711) Application: STATE: speaking
+I (271711) Application: Sending device state to K230: SPEAKING
+I (271721) FaceRecognition: Sent device state to K230: SPEAKING
+I (271771) MCP: ParseMessage: method=tools/list
+I (271841) MCP: ParseMessage: method=tools/list
+I (272741) Application: STATE: listening
+I (272741) Application: Sending device state to K230: LISTENING
+I (272741) FaceRecognition: Sent device state to K230: LISTENING
+I (274301) Application: >> 删除所有信号。
+I (275831) MCP: ParseMessage: method=tools/call
+I (275841) RFModule: [闪存] 已清除所有保存的信号
+I (275841) RF_MCP: [清理] 已清除所有信号 (共2个)
+I (276601) main: Free internal: 14835 minimal internal: 4263
+I (276901) Application: STATE: speaking
+I (276901) Application: Sending device state to K230: SPEAKING
+I (276911) FaceRecognition: Sent device state to K230: SPEAKING
+I (278021) Application: << 已删除所有保存的信号，
+I (280591) FaceRecognition: UART waiting for data... (no data received for 10 seconds)
+I (280661) Application: << 剩余信号数量为0。
+I (283061) Application: STATE: listening
+I (283071) Application: Sending device state to K230: LISTENING
+I (283071) FaceRecognition: Sent device state to K230: LISTENING
+I (284841) Application: >> 复制信号
+I (285921) MCP: ParseMessage: method=tools/call
+I (285941) RF_MCP: [复制] 开始等待RF信号，超时时间: 10000ms
+I (286601) main: Free internal: 14567 minimal internal: 4263
+I (286741) RFModule: [433MHz接收] 检测到可用信号
+I (286741) RFModule: [433MHz接收] 原始值:0x2DD9A4, 位长:24, 协议:1, 脉冲:299μs
+I (286741) RFModule: [433MHz接收] ✓ 信号接收成功: 2DD9A400 (24位:0x2DD9A4, 协议:1, 脉冲:299μs, 位长:24)
+I (286751) RFModule: [闪存] 信号已保存到索引 1 (共1个信号)
+I (286751) RF_MCP: [复制] ✓ 复制信号成功: 2DD9A400 (433MHz, 协议:1, 脉冲:299μs, 等待时间:815ms)
+I (288121) Application: STATE: speaking
+I (288121) Application: Sending device state to K230: SPEAKING
+I (288121) FaceRecognition: Sent device state to K230: SPEAKING
+I (290331) Application: << 信号复制成功，地址：2DD9A4，频率：
+I (290591) FaceRecognition: UART waiting for data... (no data received for 10 seconds)
+I (295301) Application: << 433MHz。
+I (296601) main: Free internal: 13955 minimal internal: 4263
+I (297401) Application: STATE: listening
+I (297401) Application: Sending device state to K230: LISTENING
+I (297401) FaceRecognition: Sent device state to K230: LISTENING
+I (300091) Application: >> 发送刚刚的信号。
+I (300591) FaceRecognition: UART waiting for data... (no data received for 10 seconds)
+I (301251) MCP: ParseMessage: method=tools/call
+I (301261) RF_MCP: [按索引发送] 发送信号[1]: 2DD9A400 (433MHz, 协议:1, 脉冲:299μs)
+I (301261) RFModule: [433MHz发送] 开始发送信号: 2DD9A400 (24位:0x2DD9A4, 协议:1, 脉冲:299μs, 重复:3次)
+I (301411) RFModule: [433MHz发送] ✓ 发送完成: 2DD9A400 (24位:0x2DD9A4, 协议:1, 脉冲:299μs, 重复:3次, 耗时:143ms)
+I (302321) Application: STATE: speaking
+I (302321) Application: Sending device state to K230: SPEAKING
+I (302321) FaceRecognition: Sent device state to K230: SPEAKING
+I (303281) Application: << 信号已发送。
+I (305021) Application: STATE: listening
+I (305021) Application: Sending device state to K230: LISTENING
+I (305021) FaceRecognition: Sent device state to K230: LISTENING
+I (306601) main: Free internal: 14835 minimal internal: 4263
+I (310091) Application: >> 再发送一遍。
+I (310591) FaceRecognition: UART waiting for data... (no data received for 10 seconds)
+I (311741) MCP: ParseMessage: method=tools/call
+I (311741) RF_MCP: [按索引发送] 发送信号[1]: 2DD9A400 (433MHz, 协议:1, 脉冲:299μs)
+I (311741) RFModule: [433MHz发送] 开始发送信号: 2DD9A400 (24位:0x2DD9A4, 协议:1, 脉冲:299μs, 重复:3次)
+I (311901) RFModule: [433MHz发送] ✓ 发送完成: 2DD9A400 (24位:0x2DD9A4, 协议:1, 脉冲:299μs, 重复:3次, 耗时:144ms)
+I (312911) Application: STATE: speaking
+I (312911) Application: Sending device state to K230: SPEAKING
+I (312911) FaceRecognition: Sent device state to K230: SPEAKING
+I (314111) Application: << 信号已发送。
+I (315871) Application: STATE: listening
+I (315871) Application: Sending device state to K230: LISTENING
+I (315871) FaceRecognition: Sent device state to K230: LISTENING
+I (316601) main: Free internal: 14839 minimal internal: 4263
+I (317431) Application: >> 再发送。
+I (318751) MCP: ParseMessage: method=tools/call
+I (318761) RF_MCP: [按索引发送] 发送信号[1]: 2DD9A400 (433MHz, 协议:1, 脉冲:299μs)
+I (318761) RFModule: [433MHz发送] 开始发送信号: 2DD9A400 (24位:0x2DD9A4, 协议:1, 脉冲:299μs, 重复:3次)
+I (318911) RFModule: [433MHz发送] ✓ 发送完成: 2DD9A400 (24位:0x2DD9A4, 协议:1, 脉冲:299μs, 重复:3次, 耗时:143ms)
+I (319781) Application: STATE: speaking
+I (319781) Application: Sending device state to K230: SPEAKING
+I (319781) FaceRecognition: Sent device state to K230: SPEAKING
+I (320591) FaceRecognition: UART waiting for data... (no data received for 10 seconds)
+I (320991) Application: << 信号已发送。
+I (322741) Application: STATE: listening
+I (322741) Application: Sending device state to K230: LISTENING
+I (322741) FaceRecognition: Sent device state to K230: LISTENING
+I (326611) main: Free internal: 14839 minimal internal: 4263
+I (329541) Application: >> 再发送一遍。
+I (330591) FaceRecognition: UART waiting for data... (no data received for 10 seconds)
+I (330931) MCP: ParseMessage: method=tools/call
+I (330941) RF_MCP: [按索引发送] 发送信号[1]: 2DD9A400 (433MHz, 协议:1, 脉冲:299μs)
+I (330941) RFModule: [433MHz发送] 开始发送信号: 2DD9A400 (24位:0x2DD9A4, 协议:1, 脉冲:299μs, 重复:3次)
+I (331091) RFModule: [433MHz发送] ✓ 发送完成: 2DD9A400 (24位:0x2DD9A4, 协议:1, 脉冲:299μs, 重复:3次, 耗时:143ms)
+I (332101) Application: STATE: speaking
+I (332101) Application: Sending device state to K230: SPEAKING
+I (332101) FaceRecognition: Sent device state to K230: SPEAKING
+I (333151) Application: << 信号已发送。
+I (334901) Application: STATE: listening
+I (334911) Application: Sending device state to K230: LISTENING
+I (334911) FaceRecognition: Sent device state to K230: LISTENING
+I (336611) main: Free internal: 14831 minimal internal: 4263
+I (338051) Application: >> 复制信号。
+I (339211) MCP: ParseMessage: method=tools/call
+I (339211) RF_MCP: [复制] 开始等待RF信号，超时时间: 10000ms
+I (339211) RFModule: [433MHz接收] 检测到可用信号
+I (339221) RFModule: [433MHz接收] 原始值:0x2DD9A4, 位长:24, 协议:1, 脉冲:298μs
+W (339231) RFModule: [433MHz接收] ⚠️ 信号重复: 2DD9A400 (24位:0x2DD9A4, 协议:1, 脉冲:298μs, 位长:24) - 与闪存中索引1的信号相同
+I (340591) FaceRecognition: UART waiting for data... (no data received for 10 seconds)
+I (345341) RFModule: [433MHz接收] 检测到可用信号
+I (345341) RFModule: [433MHz接收] 原始值:0x281D88, 位长:23, 协议:1, 脉冲:252μs
+I (345341) RFModule: [433MHz接收] ✓ 信号接收成功: 281D8800 (24位:0x281D88, 协议:1, 脉冲:252μs, 位长:23)
+I (345361) RFModule: [闪存] 信号已保存到索引 2 (共2个信号)
+I (345361) RF_MCP: [复制] ✓ 复制信号成功: 281D8800 (433MHz, 协议:1, 脉冲:252μs, 等待时间:6148ms)
+I (346631) main: Free internal: 14843 minimal internal: 4263
+I (346891) MCP: ParseMessage: method=tools/call
+I (346891) RF_MCP: [列表] 闪存中保存了 2 个信号
+I (346901) RF_MCP: [列表] 信号[2]: 281D8800 (433MHz, 协议:1, 脉冲:252μs (未命名))
+I (346901) RF_MCP: [列表] 信号[1]: 2DD9A400 (433MHz, 协议:1, 脉冲:299μs (未命名))
+I (348031) Application: STATE: speaking
+I (348031) Application: Sending device state to K230: SPEAKING
+I (348031) FaceRecognition: Sent device state to K230: SPEAKING
+I (349221) Application: << 信号复制成功，地址：281D88，频率：
+I (350591) FaceRecognition: UART waiting for data... (no data received for 10 seconds)
+I (354001) Application: << 433MHz。
+I (356151) Application: << 当前已保存2个信号。
+I (356631) main: Free internal: 14243 minimal internal: 4263
+I (358561) Application: STATE: listening
+I (358571) Application: Sending device state to K230: LISTENING
+I (358571) FaceRecognition: Sent device state to K230: LISTENING
+I (360591) FaceRecognition: UART waiting for data... (no data received for 10 seconds)
+I (366641) main: Free internal: 14823 minimal internal: 4263
+I (367471) Application: >> 发送第二个信号。
+I (368901) MCP: ParseMessage: method=tools/call
+I (368911) RF_MCP: [按索引发送] 发送信号[2]: 281D8800 (433MHz, 协议:1, 脉冲:252μs)
+I (368911) RFModule: [433MHz发送] 开始发送信号: 281D8800 (24位:0x281D88, 协议:1, 脉冲:252μs, 重复:3次)
+I (369041) RFModule: [433MHz发送] ✓ 发送完成: 281D8800 (24位:0x281D88, 协议:1, 脉冲:252μs, 重复:3次, 耗时:121ms)
+I (370001) Application: STATE: speaking
+I (370001) Application: Sending device state to K230: SPEAKING
+I (370001) FaceRecognition: Sent device state to K230: SPEAKING
+I (370591) FaceRecognition: UART waiting for data... (no data received for 10 seconds)
+I (371081) Application: << 信号已发送。
+I (372841) Application: STATE: listening
+I (372841) Application: Sending device state to K230: LISTENING
+I (372851) FaceRecognition: Sent device state to K230: LISTENING
+I (376661) main: Free internal: 14839 minimal internal: 4263
+I (380591) FaceRecognition: UART waiting for data... (no data received for 10 seconds)
+I (386671) main: Free internal: 14839 minimal internal: 4263
+I (390591) FaceRecognition: UART waiting for data... (no data received for 10 seconds)
+I (396671) main: Free internal: 14839 minimal internal: 4263
+I (400591) FaceRecognition: UART waiting for data... (no data received for 10 seconds)
+I (404031) Application: >> 复制信号。
+I (405161) MCP: ParseMessage: method=tools/call
+I (405161) RF_MCP: [复制] 开始等待RF信号，超时时间: 10000ms
+I (405161) RFModule: [433MHz接收] 检测到可用信号
+I (405171) RFModule: [433MHz接收] 原始值:0x281D88, 位长:23, 协议:1, 脉冲:252μs
+W (405181) RFModule: [433MHz接收] ⚠️ 信号重复: 281D8800 (24位:0x281D88, 协议:1, 脉冲:252μs, 位长:23) - 与闪存中索引2的信号相同
+I (405491) RFModule: [315MHz接收] 检测到可用信号
+I (405491) RFModule: [315MHz接收] 原始值:0x79FB98, 位长:24, 协议:1, 脉冲:328μs
+I (405491) RFModule: [315MHz接收] ✓ 信号接收成功: 79FB9800 (24位:0x79FB98, 协议:1, 脉冲:328μs, 位长:24)
+I (405511) RFModule: [闪存] 信号已保存到索引 3 (共3个信号)
+I (405511) RF_MCP: [复制] ✓ 复制信号成功: 79FB9800 (315MHz, 协议:1, 脉冲:328μs, 等待时间:348ms)
+I (406681) main: Free internal: 14843 minimal internal: 4263
+I (406961) MCP: ParseMessage: method=tools/call
+I (406961) RF_MCP: [列表] 闪存中保存了 3 个信号
+I (406961) RF_MCP: [列表] 信号[3]: 79FB9800 (315MHz, 协议:1, 脉冲:328μs (未命名))
+I (406971) RF_MCP: [列表] 信号[2]: 281D8800 (433MHz, 协议:1, 脉冲:252μs (未命名))
+I (406971) RF_MCP: [列表] 信号[1]: 2DD9A400 (433MHz, 协议:1, 脉冲:299μs (未命名))
+I (408361) Application: STATE: speaking
+I (408361) Application: Sending device state to K230: SPEAKING
+I (408361) FaceRecognition: Sent device state to K230: SPEAKING
+I (409601) Application: << 信号复制成功，地址：79FB98，频率：
+I (410591) FaceRecognition: UART waiting for data... (no data received for 10 seconds)
+I (414631) Application: << 315MHz。
+I (416681) main: Free internal: 14847 minimal internal: 4263
+I (416721) Application: << 当前已保存3个信号。
+I (419201) Application: STATE: listening
+I (419201) Application: Sending device state to K230: LISTENING
+I (419201) FaceRecognition: Sent device state to K230: LISTENING
+I (420591) FaceRecognition: UART waiting for data... (no data received for 10 seconds)
+I (425161) Application: >> 发送第三个信号。
+I (426481) MCP: ParseMessage: method=tools/call
+I (426491) RF_MCP: [按索引发送] 发送信号[3]: 79FB9800 (315MHz, 协议:1, 脉冲:328μs)
+I (426491) RFModule: [315MHz发送] 开始发送信号: 79FB9800 (24位:0x79FB98, 协议:1, 脉冲:328μs, 重复:3次)
+I (426651) RFModule: [315MHz发送] ✓ 发送完成: 79FB9800 (24位:0x79FB98, 协议:1, 脉冲:328μs, 重复:3次, 耗时:157ms)
+I (426691) main: Free internal: 14827 minimal internal: 4263
+I (427521) Application: STATE: speaking
+I (427531) Application: Sending device state to K230: SPEAKING
+I (427531) FaceRecognition: Sent device state to K230: SPEAKING
+I (428731) Application: << 信号已发送。
+I (430481) Application: STATE: listening
+I (430481) Application: Sending device state to K230: LISTENING
+I (430491) FaceRecognition: Sent device state to K230: LISTENING
+I (430591) FaceRecognition: UART waiting for data... (no data received for 10 seconds)
+I (436691) main: Free internal: 14839 minimal internal: 4263
+I (440591) FaceRecognition: UART waiting for data... (no data received for 10 seconds)
+I (446701) main: Free internal: 14751 minimal internal: 4263
+I (450591) FaceRecognition: UART waiting for data... (no data received for 10 seconds)
