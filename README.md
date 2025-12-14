@@ -41,7 +41,7 @@ ESP32 RF 收发模块库，支持 315MHz 和 433MHz 双频段 RF 信号收发。
 
 ```yaml
 dependencies:
-  zhoushoujianwork/esp32-rf-module: "^0.1.11"
+  zhoushoujianwork/esp32-rf-module: "^0.1.12"
 ```
 
 ## 配置
@@ -146,6 +146,13 @@ if (rf_module.ReceiveAvailable()) {
 MIT License
 
 ## 更新日志
+
+### v0.1.12
+- **改进**：`Send(RFSignal)` 方法现在会使用信号中存储的协议和脉冲长度参数
+  - 发送信号时，会临时使用信号中保存的 `protocol` 和 `pulse_length` 值
+  - 发送完成后自动恢复原来的全局配置
+  - 确保每个信号按照接收时的原始参数发送，提高信号复制的准确性
+  - 解决了之前使用全局配置可能导致信号发送失败的问题
 
 ### v0.1.11
 - **新增**：信号名称/主题管理功能
