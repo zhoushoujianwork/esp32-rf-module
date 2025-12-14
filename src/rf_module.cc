@@ -167,22 +167,21 @@ void RFModule::Send(const RFSignal& signal) {
     
     send_count_++;
     
-    // 保存当前的脉冲长度和协议配置
-    uint16_t saved_pulse_length;
-    uint8_t saved_protocol;
-    
+    // 使用信号中保存的参数发送，而不是全局默认配置
+    // 保存并恢复全局配置，确保不影响后续发送操作
     if (signal.frequency == RF_315MHZ) {
 #if CONFIG_RF_MODULE_ENABLE_315MHZ
-        saved_pulse_length = pulse_length_315_;
-        saved_protocol = protocol_315_;
+        // 保存当前配置
+        uint16_t saved_pulse_length = pulse_length_315_;
+        uint8_t saved_protocol = protocol_315_;
         
-        // 临时使用信号中存储的脉冲长度和协议
+        // 使用信号中保存的参数
         pulse_length_315_ = signal.pulse_length;
         protocol_315_ = signal.protocol;
         
         SendSignalTCSwitch(signal.address, signal.key);
         
-        // 恢复原来的配置
+        // 恢复全局配置（确保不影响后续操作）
         pulse_length_315_ = saved_pulse_length;
         protocol_315_ = saved_protocol;
 #else
@@ -190,16 +189,17 @@ void RFModule::Send(const RFSignal& signal) {
 #endif // CONFIG_RF_MODULE_ENABLE_315MHZ
     } else {
 #if CONFIG_RF_MODULE_ENABLE_433MHZ
-        saved_pulse_length = pulse_length_433_;
-        saved_protocol = protocol_433_;
+        // 保存当前配置
+        uint16_t saved_pulse_length = pulse_length_433_;
+        uint8_t saved_protocol = protocol_433_;
         
-        // 临时使用信号中存储的脉冲长度和协议
+        // 使用信号中保存的参数
         pulse_length_433_ = signal.pulse_length;
         protocol_433_ = signal.protocol;
         
         SendSignalRCSwitch(signal.address, signal.key);
         
-        // 恢复原来的配置
+        // 恢复全局配置（确保不影响后续操作）
         pulse_length_433_ = saved_pulse_length;
         protocol_433_ = saved_protocol;
 #else
