@@ -164,8 +164,8 @@ private:
     
     // Internal functions
     uint8_t HexToNum(char c);
-    void SendSignalRCSwitch(const std::string& address, const std::string& key);
-    void SendSignalTCSwitch(const std::string& address, const std::string& key);
+    void SendSignalRCSwitch(const std::string& address, const std::string& key, uint16_t pulse_length, uint8_t protocol);
+    void SendSignalTCSwitch(const std::string& address, const std::string& key, uint16_t pulse_length, uint8_t protocol);
     void AddToReplayBuffer(const RFSignal& signal);
     void CheckCaptureMode(const RFSignal& signal);
     std::string Uint32ToHex(uint32_t value, int length);

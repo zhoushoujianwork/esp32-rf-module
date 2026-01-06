@@ -146,13 +146,15 @@ void RFModule::Send(const std::string& address, const std::string& key, RFFreque
     
     if (freq == RF_315MHZ) {
 #if CONFIG_RF_MODULE_ENABLE_315MHZ
-        SendSignalTCSwitch(address, key);
+        // Use global default configuration for manual send
+        SendSignalTCSwitch(address, key, pulse_length_315_, protocol_315_);
 #else
         ESP_LOGE(TAG, "315MHz frequency support is disabled");
 #endif // CONFIG_RF_MODULE_ENABLE_315MHZ
     } else {
 #if CONFIG_RF_MODULE_ENABLE_433MHZ
-        SendSignalRCSwitch(address, key);
+        // Use global default configuration for manual send
+        SendSignalRCSwitch(address, key, pulse_length_433_, protocol_433_);
 #else
         ESP_LOGE(TAG, "433MHz frequency support is disabled");
 #endif // CONFIG_RF_MODULE_ENABLE_433MHZ
@@ -167,41 +169,16 @@ void RFModule::Send(const RFSignal& signal) {
     
     send_count_++;
     
-    // 使用信号中保存的参数发送，而不是全局默认配置
-    // 保存并恢复全局配置，确保不影响后续发送操作
+    // 直接使用信号中保存的参数发送，确保脉冲长度和协议正确
     if (signal.frequency == RF_315MHZ) {
 #if CONFIG_RF_MODULE_ENABLE_315MHZ
-        // 保存当前配置
-        uint16_t saved_pulse_length = pulse_length_315_;
-        uint8_t saved_protocol = protocol_315_;
-        
-        // 使用信号中保存的参数
-        pulse_length_315_ = signal.pulse_length;
-        protocol_315_ = signal.protocol;
-        
-        SendSignalTCSwitch(signal.address, signal.key);
-        
-        // 恢复全局配置（确保不影响后续操作）
-        pulse_length_315_ = saved_pulse_length;
-        protocol_315_ = saved_protocol;
+        SendSignalTCSwitch(signal.address, signal.key, signal.pulse_length, signal.protocol);
 #else
         ESP_LOGE(TAG, "315MHz frequency support is disabled");
 #endif // CONFIG_RF_MODULE_ENABLE_315MHZ
     } else {
 #if CONFIG_RF_MODULE_ENABLE_433MHZ
-        // 保存当前配置
-        uint16_t saved_pulse_length = pulse_length_433_;
-        uint8_t saved_protocol = protocol_433_;
-        
-        // 使用信号中保存的参数
-        pulse_length_433_ = signal.pulse_length;
-        protocol_433_ = signal.protocol;
-        
-        SendSignalRCSwitch(signal.address, signal.key);
-        
-        // 恢复全局配置（确保不影响后续操作）
-        pulse_length_433_ = saved_pulse_length;
-        protocol_433_ = saved_protocol;
+        SendSignalRCSwitch(signal.address, signal.key, signal.pulse_length, signal.protocol);
 #else
         ESP_LOGE(TAG, "433MHz frequency support is disabled");
 #endif // CONFIG_RF_MODULE_ENABLE_433MHZ
@@ -1030,7 +1007,7 @@ uint8_t RFModule::HexToNum(char c) {
     return 0;
 }
 
-void RFModule::SendSignalRCSwitch(const std::string& address, const std::string& key) {
+void RFModule::SendSignalRCSwitch(const std::string& address, const std::string& key, uint16_t pulse_length, uint8_t protocol) {
     if (rc_switch_ == nullptr || !enabled_) {
         return;
     }
@@ -1043,13 +1020,14 @@ void RFModule::SendSignalRCSwitch(const std::string& address, const std::string&
         code24bit = (code24bit << 4) | val;
     }
     
-    // Ensure RCSwitch configuration is correct
-    rc_switch_->setProtocol(protocol_433_);
-    rc_switch_->setPulseLength(pulse_length_433_);
+    // Use provided pulse_length and protocol instead of global variables
+    // This ensures signals are sent with their captured pulse length
+    rc_switch_->setProtocol(protocol);
+    rc_switch_->setPulseLength(pulse_length);
     rc_switch_->setRepeatTransmit(repeat_count_433_);
     
     ESP_LOGI(TAG, "[433MHz发送] 开始发送信号: %s%s (24位:0x%06lX, 协议:%d, 脉冲:%dμs, 重复:%d次)",
-             address.c_str(), key.c_str(), code24bit, protocol_433_, pulse_length_433_, repeat_count_433_);
+             address.c_str(), key.c_str(), code24bit, protocol, pulse_length, repeat_count_433_);
     
     // Send 24-bit data (standard industry practice: repeat 3 times)
     int64_t send_start_time = esp_timer_get_time();
@@ -1057,10 +1035,10 @@ void RFModule::SendSignalRCSwitch(const std::string& address, const std::string&
     int64_t send_duration = (esp_timer_get_time() - send_start_time) / 1000;  // Convert to milliseconds
     
     ESP_LOGI(TAG, "[433MHz发送] ✓ 发送完成: %s%s (24位:0x%06lX, 协议:%d, 脉冲:%dμs, 重复:%d次, 耗时:%ldms)",
-             address.c_str(), key.c_str(), (unsigned long)code24bit, protocol_433_, pulse_length_433_, repeat_count_433_, (long)send_duration);
+             address.c_str(), key.c_str(), (unsigned long)code24bit, protocol, pulse_length, repeat_count_433_, (long)send_duration);
 }
 
-void RFModule::SendSignalTCSwitch(const std::string& address, const std::string& key) {
+void RFModule::SendSignalTCSwitch(const std::string& address, const std::string& key, uint16_t pulse_length, uint8_t protocol) {
     if (tc_switch_ == nullptr || !enabled_) {
         return;
     }
@@ -1073,13 +1051,14 @@ void RFModule::SendSignalTCSwitch(const std::string& address, const std::string&
         code24bit = (code24bit << 4) | val;
     }
     
-    // Ensure TCSwitch configuration is correct
-    tc_switch_->setProtocol(protocol_315_);
-    tc_switch_->setPulseLength(pulse_length_315_);
+    // Use provided pulse_length and protocol instead of global variables
+    // This ensures signals are sent with their captured pulse length
+    tc_switch_->setProtocol(protocol);
+    tc_switch_->setPulseLength(pulse_length);
     tc_switch_->setRepeatTransmit(repeat_count_315_);
     
     ESP_LOGI(TAG, "[315MHz发送] 开始发送信号: %s%s (24位:0x%06lX, 协议:%d, 脉冲:%dμs, 重复:%d次)",
-             address.c_str(), key.c_str(), code24bit, protocol_315_, pulse_length_315_, repeat_count_315_);
+             address.c_str(), key.c_str(), code24bit, protocol, pulse_length, repeat_count_315_);
     
     // Send 24-bit data (standard industry practice: repeat 3 times)
     int64_t send_start_time = esp_timer_get_time();
@@ -1087,7 +1066,7 @@ void RFModule::SendSignalTCSwitch(const std::string& address, const std::string&
     int64_t send_duration = (esp_timer_get_time() - send_start_time) / 1000;  // Convert to milliseconds
     
     ESP_LOGI(TAG, "[315MHz发送] ✓ 发送完成: %s%s (24位:0x%06lX, 协议:%d, 脉冲:%dμs, 重复:%d次, 耗时:%ldms)",
-             address.c_str(), key.c_str(), (unsigned long)code24bit, protocol_315_, pulse_length_315_, repeat_count_315_, (long)send_duration);
+             address.c_str(), key.c_str(), (unsigned long)code24bit, protocol, pulse_length, repeat_count_315_, (long)send_duration);
 }
 
 void RFModule::AddToReplayBuffer(const RFSignal& signal) {
