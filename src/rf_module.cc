@@ -1,6 +1,12 @@
 #include "rf_module.h"
 #include "rcswitch.h"
 #include "tcswitch.h"
+#if CONFIG_RF_MODULE_ENABLE_CC1101
+#include "cc1101.h"
+#include "cc1101_defs.h"
+#include <driver/spi_master.h>
+#include <esp_rom_sys.h>
+#endif
 #include <esp_log.h>
 #include <driver/gpio.h>
 #include <esp_timer.h>
@@ -9,7 +15,10 @@
 #include <iomanip>
 #include <algorithm>
 
-#include <nvs.h>  // NVS available on all ESP32 series chips
+#if CONFIG_RF_MODULE_ENABLE_SD_STORAGE
+#include <cstdio>
+#include <cstdlib>
+#endif
 
 #define TAG "RFModule"
 
@@ -18,6 +27,9 @@ RFModule::RFModule(gpio_num_t tx433_pin, gpio_num_t rx433_pin,
     : tx433_pin_(tx433_pin), rx433_pin_(rx433_pin),
       tx315_pin_(tx315_pin), rx315_pin_(rx315_pin),
       rc_switch_(nullptr), tc_switch_(nullptr),
+#if CONFIG_RF_MODULE_ENABLE_CC1101
+      cc1101_(nullptr), cc1101_initialized_(false),
+#endif
       current_frequency_(RF_433MHZ),
       repeat_count_433_(3), repeat_count_315_(3),
       protocol_433_(1), protocol_315_(1),
@@ -31,11 +43,10 @@ RFModule::RFModule(gpio_num_t tx433_pin, gpio_num_t rx433_pin,
       replay_buffer_count_(0),
       capture_mode_(false), has_captured_signal_(false),
       receive_enabled_433_(true), receive_enabled_315_(true),
-      flash_storage_enabled_(false),
-      nvs_handle_(0),
-      flash_namespace_("rf_replay"),
-      flash_signal_count_(0),
-      flash_signal_index_(0),
+      sd_storage_enabled_(false),
+      stored_signals_(nullptr),
+      storage_signal_count_(0),
+      storage_signal_index_(0),
       enabled_(false) {
 }
 
@@ -43,13 +54,43 @@ RFModule::~RFModule() {
     End();
 }
 
+#if CONFIG_RF_MODULE_ENABLE_CC1101
+static volatile unsigned long cc1101_last_edge_time = 0;
+static volatile unsigned int cc1101_change_count = 0;
+static volatile unsigned int cc1101_timings[200];
+static RFModule* cc1101_instance = nullptr;
+
+static void IRAM_ATTR cc1101_gpio_isr_handler(void* arg) {
+    if (!cc1101_instance || !cc1101_instance->IsCaptureMode()) return;
+    int level = gpio_get_level((gpio_num_t)(intptr_t)arg);
+    unsigned long time = esp_timer_get_time();
+    unsigned long duration = time - cc1101_last_edge_time;
+    if (duration > 5000 && duration > 350 * 31 - 2000) {
+        if (level == 1) {
+            cc1101_change_count = 0;
+        }
+    }
+    if (cc1101_change_count < 200) {
+        cc1101_timings[cc1101_change_count++] = (unsigned int)duration;
+    }
+    cc1101_last_edge_time = time;
+}
+#endif
+
 void RFModule::Begin() {
     if (enabled_) {
         ESP_LOGW(TAG, "RF module already enabled");
         return;
     }
-    
-#if CONFIG_RF_MODULE_ENABLE_433MHZ
+
+#if CONFIG_RF_MODULE_ENABLE_CC1101
+    if (!cc1101_initialized_) {
+        ESP_LOGW(TAG, "CC1101 mode: call Begin(spi_host, sck, mosi, miso) to initialize");
+        return;
+    }
+#endif
+
+#if CONFIG_RF_MODULE_ENABLE_433MHZ && !CONFIG_RF_MODULE_ENABLE_CC1101
     // Initialize 433MHz TX pin
     gpio_set_direction(tx433_pin_, GPIO_MODE_OUTPUT);
     gpio_set_level(tx433_pin_, 0);
@@ -66,9 +107,9 @@ void RFModule::Begin() {
             rc_switch_->enableReceive(static_cast<int>(rx433_pin_));
         }
     }
-#endif // CONFIG_RF_MODULE_ENABLE_433MHZ
-    
-#if CONFIG_RF_MODULE_ENABLE_315MHZ
+#endif // CONFIG_RF_MODULE_ENABLE_433MHZ && !CONFIG_RF_MODULE_ENABLE_CC1101
+
+#if CONFIG_RF_MODULE_ENABLE_315MHZ && !CONFIG_RF_MODULE_ENABLE_CC1101
     // Initialize 315MHz TX pin
     gpio_set_direction(tx315_pin_, GPIO_MODE_OUTPUT);
     gpio_set_level(tx315_pin_, 0);
@@ -85,21 +126,11 @@ void RFModule::Begin() {
             tc_switch_->enableReceive(static_cast<int>(rx315_pin_));
         }
     }
-#endif // CONFIG_RF_MODULE_ENABLE_315MHZ
-    
+#endif // CONFIG_RF_MODULE_ENABLE_315MHZ && !CONFIG_RF_MODULE_ENABLE_CC1101
+
     enabled_ = true;
     ResetCounters();
-    
-#if CONFIG_RF_MODULE_ENABLE_FLASH_STORAGE
-    // Enable flash storage and load saved signal
-    EnableFlashStorage("rf_replay");
-    ESP_LOGI(TAG, "[闪存] Flash storage enabled: enabled=%d, handle=%lu", 
-            flash_storage_enabled_, (unsigned long)nvs_handle_);
-    LoadFromFlash();  // Load the last saved signal
-    ESP_LOGI(TAG, "[闪存] After LoadFromFlash: count=%d, has_signal=%d", 
-            flash_signal_count_, has_captured_signal_);
-#endif // CONFIG_RF_MODULE_ENABLE_FLASH_STORAGE
-    
+
     ESP_LOGI(TAG, "RF module initialized: TX433=%d, RX433=%d, TX315=%d, RX315=%d",
              tx433_pin_, rx433_pin_, tx315_pin_, rx315_pin_);
 }
@@ -127,37 +158,144 @@ void RFModule::End() {
     
     // Cleanup replay buffer
     DisableReplayBuffer();
-    
-#if CONFIG_RF_MODULE_ENABLE_FLASH_STORAGE
-    DisableFlashStorage();
-#endif // CONFIG_RF_MODULE_ENABLE_FLASH_STORAGE
-    
+
+    DisableSDStorage();
+
+#if CONFIG_RF_MODULE_ENABLE_CC1101
+    if (cc1101_initialized_ && cc1101_ != nullptr) {
+        gpio_isr_handler_remove(rx433_pin_);
+        cc1101_instance = nullptr;
+        delete cc1101_;
+        cc1101_ = nullptr;
+        cc1101_initialized_ = false;
+    }
+#endif
+
     enabled_ = false;
     ESP_LOGI(TAG, "RF module disabled");
 }
+
+#if CONFIG_RF_MODULE_ENABLE_CC1101
+void RFModule::Begin(int spi_host, int sck_pin, int mosi_pin, int miso_pin) {
+    if (cc1101_initialized_) {
+        ESP_LOGW(TAG, "CC1101 already initialized");
+        return;
+    }
+    cc1101_instance = this;
+    cc1101_ = new CC1101();
+    esp_err_t ret = cc1101_->Init((spi_host_device_t)spi_host, (int)tx433_pin_,
+                                  sck_pin, mosi_pin, miso_pin,
+                                  (int)rx433_pin_, (int)tx315_pin_);
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "CC1101 Init failed");
+        delete cc1101_;
+        cc1101_ = nullptr;
+        return;
+    }
+    gpio_install_isr_service(0);
+    SetupCC1101ForRx(433);
+    gpio_isr_handler_add(rx433_pin_, cc1101_gpio_isr_handler, (void*)(intptr_t)rx433_pin_);
+    cc1101_initialized_ = true;
+    enabled_ = true;
+    ResetCounters();
+    ESP_LOGI(TAG, "RF module initialized (CC1101): CS=%d GDO0=%d GDO2=%d", tx433_pin_, rx433_pin_, tx315_pin_);
+}
+
+void RFModule::SetupCC1101ForRx(int frequency_mhz) {
+    gpio_isr_handler_remove(rx433_pin_);
+    cc1101_->SetIdle();
+    cc1101_->SetFrequency(frequency_mhz == 433 ? 433.92f : 315.0f);
+    cc1101_->SetPktFormat(3);
+    cc1101_->SpiWriteReg(CC1101_IOCFG0, 0x0D);
+    cc1101_->SetModulation(2);
+    cc1101_->SetRxBW(270.0f);
+    cc1101_->SetDRate(2.0f);
+    cc1101_->SetRx();
+    gpio_config_t io_conf = {};
+    io_conf.intr_type = GPIO_INTR_ANYEDGE;
+    io_conf.pin_bit_mask = (1ULL << rx433_pin_);
+    io_conf.mode = GPIO_MODE_INPUT;
+    io_conf.pull_up_en = GPIO_PULLUP_DISABLE;
+    io_conf.pull_down_en = GPIO_PULLDOWN_DISABLE;
+    gpio_config(&io_conf);
+    gpio_isr_handler_add(rx433_pin_, cc1101_gpio_isr_handler, (void*)(intptr_t)rx433_pin_);
+}
+
+void RFModule::SetupCC1101ForTx(int frequency_mhz) {
+    gpio_isr_handler_remove(rx433_pin_);
+    cc1101_->SetIdle();
+    cc1101_->SetFrequency(frequency_mhz == 433 ? 433.92f : 315.0f);
+    cc1101_->SetPktFormat(3);
+    cc1101_->SpiWriteReg(CC1101_IOCFG0, 0x0D);
+    cc1101_->SetModulation(2);
+    cc1101_->SetPA(10);
+    cc1101_->SetTx();
+    gpio_config_t io_conf = {};
+    io_conf.intr_type = GPIO_INTR_DISABLE;
+    io_conf.pin_bit_mask = (1ULL << rx433_pin_);
+    io_conf.mode = GPIO_MODE_OUTPUT;
+    io_conf.pull_up_en = GPIO_PULLUP_DISABLE;
+    io_conf.pull_down_en = GPIO_PULLDOWN_DISABLE;
+    gpio_config(&io_conf);
+}
+
+void RFModule::SendSignalCC1101(const std::string& address, const std::string& key, RFFrequency freq, uint16_t pulse_length, uint8_t protocol) {
+    (void)protocol;
+    (void)key;
+    int freq_mhz = (freq == RF_315MHZ) ? 315 : 433;
+    SetupCC1101ForTx(freq_mhz);
+    unsigned long code = HexToUint32(address.length() >= 6 ? address.substr(0, 6) : address) & 0xFFFFFF;
+    int bits = 24;
+    int pulse_len = pulse_length > 0 ? pulse_length : 350;
+    for (int r = 0; r < 3; r++) {
+        gpio_set_level(rx433_pin_, 1);
+        esp_rom_delay_us(pulse_len);
+        gpio_set_level(rx433_pin_, 0);
+        esp_rom_delay_us(pulse_len * 31);
+        for (int i = bits - 1; i >= 0; i--) {
+            if ((code >> i) & 1) {
+                gpio_set_level(rx433_pin_, 1);
+                esp_rom_delay_us(pulse_len * 3);
+                gpio_set_level(rx433_pin_, 0);
+                esp_rom_delay_us(pulse_len);
+            } else {
+                gpio_set_level(rx433_pin_, 1);
+                esp_rom_delay_us(pulse_len);
+                gpio_set_level(rx433_pin_, 0);
+                esp_rom_delay_us(pulse_len * 3);
+            }
+        }
+    }
+    SetupCC1101ForRx(freq_mhz);
+}
+#endif
 
 void RFModule::Send(const std::string& address, const std::string& key, RFFrequency freq) {
     if (!enabled_) {
         ESP_LOGW(TAG, "RF module not enabled");
         return;
     }
-    
     send_count_++;
-    
+#if CONFIG_RF_MODULE_ENABLE_CC1101
+    if (cc1101_initialized_ && cc1101_ != nullptr) {
+        uint16_t pl = (freq == RF_315MHZ) ? pulse_length_315_ : pulse_length_433_;
+        uint8_t proto = (freq == RF_315MHZ) ? protocol_315_ : protocol_433_;
+        SendSignalCC1101(address, key, freq, pl, proto);
+        return;
+    }
+#endif
     if (freq == RF_315MHZ) {
 #if CONFIG_RF_MODULE_ENABLE_315MHZ
-        // Use global default configuration for manual send
         SendSignalTCSwitch(address, key, pulse_length_315_, protocol_315_);
 #else
         ESP_LOGE(TAG, "315MHz frequency support is disabled");
-#endif // CONFIG_RF_MODULE_ENABLE_315MHZ
+#endif
     } else {
 #if CONFIG_RF_MODULE_ENABLE_433MHZ
-        // Use global default configuration for manual send
         SendSignalRCSwitch(address, key, pulse_length_433_, protocol_433_);
 #else
         ESP_LOGE(TAG, "433MHz frequency support is disabled");
-#endif // CONFIG_RF_MODULE_ENABLE_433MHZ
+#endif
     }
 }
 
@@ -166,22 +304,25 @@ void RFModule::Send(const RFSignal& signal) {
         ESP_LOGW(TAG, "RF module not enabled");
         return;
     }
-    
     send_count_++;
-    
-    // 直接使用信号中保存的参数发送，确保脉冲长度和协议正确
+#if CONFIG_RF_MODULE_ENABLE_CC1101
+    if (cc1101_initialized_ && cc1101_ != nullptr) {
+        SendSignalCC1101(signal.address, signal.key, signal.frequency, signal.pulse_length, signal.protocol);
+        return;
+    }
+#endif
     if (signal.frequency == RF_315MHZ) {
 #if CONFIG_RF_MODULE_ENABLE_315MHZ
         SendSignalTCSwitch(signal.address, signal.key, signal.pulse_length, signal.protocol);
 #else
         ESP_LOGE(TAG, "315MHz frequency support is disabled");
-#endif // CONFIG_RF_MODULE_ENABLE_315MHZ
+#endif
     } else {
 #if CONFIG_RF_MODULE_ENABLE_433MHZ
         SendSignalRCSwitch(signal.address, signal.key, signal.pulse_length, signal.protocol);
 #else
         ESP_LOGE(TAG, "433MHz frequency support is disabled");
-#endif // CONFIG_RF_MODULE_ENABLE_433MHZ
+#endif
     }
 }
 
@@ -189,23 +330,58 @@ bool RFModule::ReceiveAvailable() {
     if (!enabled_) {
         return false;
     }
-    
+#if CONFIG_RF_MODULE_ENABLE_CC1101
+    if (cc1101_initialized_ && cc1101_ != nullptr && capture_mode_) {
+        if (cc1101_change_count > 24 * 2) {
+            unsigned long code = 0;
+            int bits = 0;
+            for (unsigned int i = 1; i + 1 < cc1101_change_count; i += 2) {
+                unsigned int t0 = cc1101_timings[i];
+                unsigned int t1 = cc1101_timings[i + 1];
+                if (t0 > 1000 || t1 > 1000) break;
+                if (t0 > t1 * 2 || t1 > t0 * 2) {
+                    code = (code << 1) | (t0 > t1 ? 1u : 0u);
+                    bits++;
+                } else if (t1 > t0) {
+                    code = (code << 1) | 0;
+                    bits++;
+                } else {
+                    break;
+                }
+            }
+            if (bits >= 24) {
+                char hex_buf[9];
+                snprintf(hex_buf, sizeof(hex_buf), "%06lX", code & 0xFFFFFF);
+                captured_signal_.address = hex_buf;
+                captured_signal_.key = "00";
+                captured_signal_.frequency = RF_433MHZ;
+                captured_signal_.protocol = 1;
+                captured_signal_.pulse_length = 350;
+                receive_count_++;
+                last_received_ = captured_signal_;
+                AddToReplayBuffer(captured_signal_);
+                CheckCaptureMode(captured_signal_);
+                has_captured_signal_ = true;
+                if (receive_callback_) receive_callback_(captured_signal_);
+                cc1101_change_count = 0;
+                ESP_LOGI(TAG, "[CC1101接收] ✓ 信号: %s", captured_signal_.address.c_str());
+                return true;
+            }
+        }
+    }
+#endif
 #if CONFIG_RF_MODULE_ENABLE_433MHZ
-    // Check 433MHz interrupt receive
     if (rc_switch_ != nullptr && receive_enabled_433_ && rc_switch_->available()) {
         ESP_LOGI(TAG, "[433MHz接收] 检测到可用信号");
         return true;
     }
-#endif // CONFIG_RF_MODULE_ENABLE_433MHZ
-    
+#endif
 #if CONFIG_RF_MODULE_ENABLE_315MHZ
-    // Check 315MHz interrupt receive
     if (tc_switch_ != nullptr && receive_enabled_315_ && tc_switch_->available()) {
         ESP_LOGI(TAG, "[315MHz接收] 检测到可用信号");
         return true;
     }
-#endif // CONFIG_RF_MODULE_ENABLE_315MHZ
-    
+#endif
     return false;
 }
 
@@ -213,7 +389,13 @@ bool RFModule::Receive(RFSignal& signal) {
     if (!enabled_) {
         return false;
     }
-    
+#if CONFIG_RF_MODULE_ENABLE_CC1101
+    if (cc1101_initialized_ && has_captured_signal_) {
+        signal = captured_signal_;
+        has_captured_signal_ = false;
+        return true;
+    }
+#endif
 #if CONFIG_RF_MODULE_ENABLE_433MHZ
     // Check 433MHz interrupt receive
     if (rc_switch_ != nullptr && receive_enabled_433_ && rc_switch_->available()) {
@@ -261,7 +443,7 @@ bool RFModule::Receive(RFSignal& signal) {
             
             // Print receive log
             if (is_duplicate) {
-                ESP_LOGW(TAG, "[433MHz接收] ⚠️ 信号重复: %s%s (24位:0x%06lX, 协议:%d, 脉冲:%dμs, 位长:%d) - 与闪存中索引%d的信号相同",
+                ESP_LOGW(TAG, "[433MHz接收] ⚠️ 信号重复: %s%s (24位:0x%06lX, 协议:%d, 脉冲:%dμs, 位长:%d) - 与存储中索引%d的信号相同",
                         signal.address.c_str(), signal.key.c_str(), value & 0xFFFFFF, protocol, delay, bitlength, duplicate_index);
             } else {
                 ESP_LOGI(TAG, "[433MHz接收] ✓ 信号接收成功: %s%s (24位:0x%06lX, 协议:%d, 脉冲:%dμs, 位长:%d)",
@@ -489,11 +671,9 @@ void RFModule::SetCapturedSignalName(const std::string& name) {
 void RFModule::ClearCapturedSignal() {
     has_captured_signal_ = false;
     captured_signal_ = RFSignal();
-#if CONFIG_RF_MODULE_ENABLE_FLASH_STORAGE
-    if (flash_storage_enabled_) {
-        ClearFlash();
+    if (sd_storage_enabled_) {
+        ClearStorage();
     }
-#endif // CONFIG_RF_MODULE_ENABLE_FLASH_STORAGE
 }
 
 void RFModule::SetReceiveCallback(ReceiveCallback callback) {
@@ -541,410 +721,228 @@ void RFModule::ClearReplayBuffer() {
     replay_buffer_count_ = 0;
 }
 
-void RFModule::EnableFlashStorage(const char* namespace_name) {
-    flash_storage_enabled_ = true;
-    flash_namespace_ = namespace_name;
-    if (nvs_handle_ == 0) {
-        esp_err_t err = nvs_open(namespace_name, NVS_READWRITE, &nvs_handle_);
-        if (err != ESP_OK) {
-            ESP_LOGE(TAG, "Failed to open NVS namespace: %s", esp_err_to_name(err));
-            nvs_handle_ = 0;
-            flash_storage_enabled_ = false;
-        }
+void RFModule::EnableSDStorage(const char* path) {
+    if (path == nullptr || path[0] == '\0') return;
+    sd_storage_path_ = path;
+    if (stored_signals_ == nullptr) {
+        stored_signals_ = new RFSignal[MAX_STORED_SIGNALS];
     }
+    storage_signal_count_ = 0;
+    storage_signal_index_ = 0;
+    sd_storage_enabled_ = true;
+    LoadFromStorage();
 }
 
-void RFModule::DisableFlashStorage() {
-    flash_storage_enabled_ = false;
-    if (nvs_handle_ != 0) {
-        nvs_close(nvs_handle_);
-        nvs_handle_ = 0;
+void RFModule::DisableSDStorage() {
+    sd_storage_enabled_ = false;
+    if (stored_signals_ != nullptr) {
+        delete[] stored_signals_;
+        stored_signals_ = nullptr;
     }
+    storage_signal_count_ = 0;
+    storage_signal_index_ = 0;
 }
 
-bool RFModule::SaveToFlash() {
-    if (!flash_storage_enabled_ || nvs_handle_ == 0) {
-        ESP_LOGW(TAG, "[闪存] SaveToFlash: flash_storage_enabled_=%d, nvs_handle_=%lu", 
-                flash_storage_enabled_, (unsigned long)nvs_handle_);
-        return false;
-    }
-    
-    if (!has_captured_signal_ || captured_signal_.address.empty()) {
-        ESP_LOGW(TAG, "[闪存] SaveToFlash: has_captured_signal_=%d, address.empty()=%d", 
-                has_captured_signal_, captured_signal_.address.empty());
-        return false;
-    }
-    
-    // Check for duplicate signal BEFORE saving
+uint8_t RFModule::GetStorageSignalCount() const {
+    return storage_signal_count_;
+}
+
+bool RFModule::IsSDStorageEnabled() const {
+    return sd_storage_enabled_;
+}
+
+bool RFModule::SaveToStorage() {
+#if !CONFIG_RF_MODULE_ENABLE_SD_STORAGE
+    (void)this;
+    return false;
+#else
+    if (!sd_storage_enabled_ || stored_signals_ == nullptr) return false;
+    if (!has_captured_signal_ || captured_signal_.address.empty()) return false;
     uint8_t duplicate_index = 0;
-    bool is_duplicate = CheckDuplicateSignal(captured_signal_, duplicate_index);
-    if (is_duplicate) {
-        ESP_LOGW(TAG, "[闪存] 检测到重复信号，不保存: %s%s (%sMHz) - 与闪存中索引%d的信号相同", 
-                captured_signal_.address.c_str(), captured_signal_.key.c_str(),
-                captured_signal_.frequency == RF_315MHZ ? "315" : "433",
-                duplicate_index);
-        return false;  // 不保存重复信号
-    }
-    
-    // Check if flash storage is full (circular buffer allows overwriting, but we warn user)
-    // Note: Circular buffer will overwrite oldest signal when full, but we should warn
-    if (flash_signal_count_ >= MAX_FLASH_SIGNALS) {
-        ESP_LOGW(TAG, "[闪存] 信号存储已满 (%d/%d)，将覆盖最旧的信号", 
-                flash_signal_count_, MAX_FLASH_SIGNALS);
-        // Continue to save (overwrite oldest), but log warning
-    }
-    
-    // Use circular buffer: save to current index, then advance
-    char key_prefix[32];
-    snprintf(key_prefix, sizeof(key_prefix), "sig_%d_", flash_signal_index_);
-    
-    esp_err_t err;
-    std::string addr_key = std::string(key_prefix) + "addr";
-    std::string key_key = std::string(key_prefix) + "key";
-    std::string freq_key = std::string(key_prefix) + "freq";
-    std::string proto_key = std::string(key_prefix) + "proto";
-    std::string pulse_key = std::string(key_prefix) + "pulse";
-    std::string name_key = std::string(key_prefix) + "name";
-    
-    err = nvs_set_str(nvs_handle_, addr_key.c_str(), captured_signal_.address.c_str());
-    if (err != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to save address: %s", esp_err_to_name(err));
+    if (CheckDuplicateSignal(captured_signal_, duplicate_index)) {
+        ESP_LOGW(TAG, "[SD存储] 重复信号，不保存: %s%s - 与索引%d相同",
+                captured_signal_.address.c_str(), captured_signal_.key.c_str(), duplicate_index);
         return false;
     }
-    
-    err = nvs_set_str(nvs_handle_, key_key.c_str(), captured_signal_.key.c_str());
-    if (err != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to save key: %s", esp_err_to_name(err));
+    if (storage_signal_count_ >= MAX_STORED_SIGNALS) {
+        ESP_LOGW(TAG, "[SD存储] 已满 (%d/%d)，覆盖最旧", storage_signal_count_, MAX_STORED_SIGNALS);
+    }
+    uint8_t write_idx = storage_signal_index_ % MAX_STORED_SIGNALS;
+    stored_signals_[write_idx] = captured_signal_;
+    storage_signal_index_ = (storage_signal_index_ + 1) % MAX_STORED_SIGNALS;
+    if (storage_signal_count_ < MAX_STORED_SIGNALS) storage_signal_count_++;
+    std::string filepath = sd_storage_path_ + "/rf_signals.txt";
+    FILE* f = fopen(filepath.c_str(), "w");
+    if (!f) {
+        ESP_LOGE(TAG, "Failed to open %s for write", filepath.c_str());
         return false;
     }
-    
-    nvs_set_u8(nvs_handle_, freq_key.c_str(), captured_signal_.frequency);
-    nvs_set_u8(nvs_handle_, proto_key.c_str(), captured_signal_.protocol);
-    nvs_set_u16(nvs_handle_, pulse_key.c_str(), captured_signal_.pulse_length);
-    
-    // Save name field (empty string if not set)
-    err = nvs_set_str(nvs_handle_, name_key.c_str(), 
-                      captured_signal_.name.empty() ? "" : captured_signal_.name.c_str());
-    if (err != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to save name: %s", esp_err_to_name(err));
-        return false;
+    fprintf(f, "%u\n", (unsigned)storage_signal_count_);
+    for (uint8_t i = 0; i < storage_signal_count_; i++) {
+        uint8_t idx = (storage_signal_index_ - 1 - i + MAX_STORED_SIGNALS) % MAX_STORED_SIGNALS;
+        const RFSignal& s = stored_signals_[idx];
+        fprintf(f, "%s\t%s\t%u\t%u\t%u\t%s\n",
+                s.address.c_str(), s.key.c_str(), (unsigned)s.frequency, (unsigned)s.protocol,
+                (unsigned)s.pulse_length, s.name.empty() ? "" : s.name.c_str());
     }
-    
-    // Update circular buffer index and count
-    flash_signal_index_ = (flash_signal_index_ + 1) % MAX_FLASH_SIGNALS;
-    if (flash_signal_count_ < MAX_FLASH_SIGNALS) {
-        flash_signal_count_++;
-    }
-    
-    // Save metadata
-    nvs_set_u8(nvs_handle_, "count", flash_signal_count_);
-    nvs_set_u8(nvs_handle_, "index", flash_signal_index_);
-    nvs_set_u8(nvs_handle_, "has_signal", 1);
-    
-    err = nvs_commit(nvs_handle_);
-    if (err != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to commit NVS: %s", esp_err_to_name(err));
-        return false;
-    }
-    
-    // 显示用户索引：最新信号索引最大，按录入顺序递增
-    uint8_t user_index = flash_signal_count_;
-    ESP_LOGI(TAG, "[闪存] 信号已保存到索引 %d (共%d个信号)", 
-             user_index, 
-             flash_signal_count_);
+    fclose(f);
+    ESP_LOGI(TAG, "[SD存储] 已保存到索引 %u (共%u个)", (unsigned)storage_signal_count_, (unsigned)storage_signal_count_);
     return true;
+#endif
 }
 
-bool RFModule::LoadFromFlash() {
-    if (!flash_storage_enabled_ || nvs_handle_ == 0) {
+bool RFModule::LoadFromStorage() {
+#if !CONFIG_RF_MODULE_ENABLE_SD_STORAGE
+    return false;
+#else
+    if (!sd_storage_enabled_ || stored_signals_ == nullptr || sd_storage_path_.empty()) return false;
+    std::string filepath = sd_storage_path_ + "/rf_signals.txt";
+    FILE* f = fopen(filepath.c_str(), "r");
+    if (!f) return false;
+    unsigned int count = 0;
+    if (fscanf(f, "%u", &count) != 1 || count > MAX_STORED_SIGNALS) {
+        fclose(f);
         return false;
     }
-    
-    // Load metadata
-    uint8_t has_signal = 0;
-    esp_err_t err = nvs_get_u8(nvs_handle_, "has_signal", &has_signal);
-    if (err != ESP_OK || !has_signal) {
-        flash_signal_count_ = 0;
-        flash_signal_index_ = 0;
-        has_captured_signal_ = false;
-        return false;
-    }
-    
-    // Load count and index
-    nvs_get_u8(nvs_handle_, "count", &flash_signal_count_);
-    nvs_get_u8(nvs_handle_, "index", &flash_signal_index_);
-    
-    if (flash_signal_count_ == 0) {
-        has_captured_signal_ = false;
-        return false;
-    }
-    
-    // Load the most recent signal (index - 1, wrapping around)
-    uint8_t load_index = (flash_signal_index_ - 1 + MAX_FLASH_SIGNALS) % MAX_FLASH_SIGNALS;
-    char key_prefix[32];
-    snprintf(key_prefix, sizeof(key_prefix), "sig_%d_", load_index);
-    
-    std::string addr_key = std::string(key_prefix) + "addr";
-    std::string key_key = std::string(key_prefix) + "key";
-    std::string freq_key = std::string(key_prefix) + "freq";
-    std::string proto_key = std::string(key_prefix) + "proto";
-    std::string pulse_key = std::string(key_prefix) + "pulse";
-    std::string name_key = std::string(key_prefix) + "name";
-    
-    size_t required_size = 0;
-    err = nvs_get_str(nvs_handle_, addr_key.c_str(), nullptr, &required_size);
-    if (err == ESP_OK && required_size > 0) {
-        char* addr_buf = new char[required_size];
-        err = nvs_get_str(nvs_handle_, addr_key.c_str(), addr_buf, &required_size);
-        if (err == ESP_OK) {
-            captured_signal_.address = addr_buf;
-            
-            required_size = 0;
-            err = nvs_get_str(nvs_handle_, key_key.c_str(), nullptr, &required_size);
-            if (err == ESP_OK && required_size > 0) {
-                char* key_buf = new char[required_size];
-                err = nvs_get_str(nvs_handle_, key_key.c_str(), key_buf, &required_size);
-                if (err == ESP_OK) {
-                    captured_signal_.key = key_buf;
-                    
-                    uint8_t freq = 0;
-                    nvs_get_u8(nvs_handle_, freq_key.c_str(), &freq);
-                    captured_signal_.frequency = (RFFrequency)freq;
-                    
-                    nvs_get_u8(nvs_handle_, proto_key.c_str(), &captured_signal_.protocol);
-                    nvs_get_u16(nvs_handle_, pulse_key.c_str(), &captured_signal_.pulse_length);
-                    
-                    // Read name field (backward compatible: if not exists, default to empty string)
-                    required_size = 0;
-                    err = nvs_get_str(nvs_handle_, name_key.c_str(), nullptr, &required_size);
-                    if (err == ESP_OK && required_size > 0) {
-                        char* name_buf = new char[required_size];
-                        err = nvs_get_str(nvs_handle_, name_key.c_str(), name_buf, &required_size);
-                        if (err == ESP_OK) {
-                            captured_signal_.name = name_buf;
-                        }
-                        delete[] name_buf;
-                    } else {
-                        // Name field doesn't exist (old data), default to empty string
-                        captured_signal_.name = "";
-                    }
-                    
-                    delete[] key_buf;
-                    delete[] addr_buf;
-                    
-                    if (!captured_signal_.address.empty() && !captured_signal_.key.empty()) {
-                        has_captured_signal_ = true;
-                        ESP_LOGI(TAG, "[闪存] 已加载信号: %s%s (%sMHz, 共%d个信号%s)", 
-                                captured_signal_.address.c_str(), captured_signal_.key.c_str(),
-                                captured_signal_.frequency == RF_315MHZ ? "315" : "433",
-                                flash_signal_count_,
-                                captured_signal_.name.empty() ? "" : (", 名称:" + captured_signal_.name).c_str());
-                        return true;
-                    }
-                } else {
-                    delete[] key_buf;
-                }
-            }
-            delete[] addr_buf;
+    storage_signal_count_ = (uint8_t)count;
+    storage_signal_index_ = storage_signal_count_ % MAX_STORED_SIGNALS;
+    char line[512];
+    if (fgets(line, sizeof(line), f) == nullptr && count > 0) { fclose(f); return false; }
+    for (uint8_t i = 0; i < storage_signal_count_; i++) {
+        if (fgets(line, sizeof(line), f) == nullptr) break;
+        uint8_t slot = (storage_signal_count_ - 1 - i + MAX_STORED_SIGNALS) % MAX_STORED_SIGNALS;
+        RFSignal& s = stored_signals_[slot];
+        char* p = line;
+        char* tabs[6];
+        int nt = 0;
+        for (nt = 0; nt < 6 && p; nt++) {
+            tabs[nt] = p;
+            p = strchr(p, '\t');
+            if (p) { *p = '\0'; p++; }
+        }
+        if (nt >= 5) {
+            s.address = tabs[0];
+            s.key = tabs[1];
+            s.frequency = (RFFrequency)(atoi(tabs[2]) & 1);
+            s.protocol = (uint8_t)atoi(tabs[3]);
+            s.pulse_length = (uint16_t)atoi(tabs[4]);
+            s.name = (nt >= 6) ? tabs[5] : "";
         }
     }
-    
-    has_captured_signal_ = false;
+    if (storage_signal_count_ > 0) {
+        uint8_t newest = (storage_signal_index_ - 1 + MAX_STORED_SIGNALS) % MAX_STORED_SIGNALS;
+        captured_signal_ = stored_signals_[newest];
+        has_captured_signal_ = true;
+        ESP_LOGI(TAG, "[SD存储] 已加载 %u 个信号", (unsigned)storage_signal_count_);
+    }
+    fclose(f);
+    return storage_signal_count_ > 0;
+#endif
+}
+
+void RFModule::ClearStorage() {
+    if (!sd_storage_enabled_ || stored_signals_ == nullptr) return;
+    storage_signal_count_ = 0;
+    storage_signal_index_ = 0;
+#if CONFIG_RF_MODULE_ENABLE_SD_STORAGE
+    std::string filepath = sd_storage_path_ + "/rf_signals.txt";
+    FILE* f = fopen(filepath.c_str(), "w");
+    if (f) {
+        fprintf(f, "0\n");
+        fclose(f);
+    }
+#endif
+    ESP_LOGI(TAG, "[SD存储] 已清除所有信号");
+}
+
+bool RFModule::ClearStorageSignal(uint8_t index) {
+#if !CONFIG_RF_MODULE_ENABLE_SD_STORAGE
+    (void)index;
     return false;
-}
-
-void RFModule::ClearFlash() {
-    if (!flash_storage_enabled_ || nvs_handle_ == 0) {
-        return;
+#else
+    if (!sd_storage_enabled_ || stored_signals_ == nullptr || index >= storage_signal_count_) return false;
+    uint8_t actual = (storage_signal_index_ - 1 - index + MAX_STORED_SIGNALS) % MAX_STORED_SIGNALS;
+    for (uint8_t i = actual; i + 1 < storage_signal_count_; i++) {
+        uint8_t next = (i + 1) % MAX_STORED_SIGNALS;
+        stored_signals_[i] = stored_signals_[next];
     }
-    
-    // Erase all signal entries
-    for (uint8_t i = 0; i < MAX_FLASH_SIGNALS; i++) {
-        char key_prefix[32];
-        snprintf(key_prefix, sizeof(key_prefix), "sig_%d_", i);
-        nvs_erase_key(nvs_handle_, (std::string(key_prefix) + "addr").c_str());
-        nvs_erase_key(nvs_handle_, (std::string(key_prefix) + "key").c_str());
-        nvs_erase_key(nvs_handle_, (std::string(key_prefix) + "freq").c_str());
-        nvs_erase_key(nvs_handle_, (std::string(key_prefix) + "proto").c_str());
-        nvs_erase_key(nvs_handle_, (std::string(key_prefix) + "pulse").c_str());
-        nvs_erase_key(nvs_handle_, (std::string(key_prefix) + "name").c_str());
+    storage_signal_count_--;
+    storage_signal_index_ = (storage_signal_index_ - 1 + MAX_STORED_SIGNALS) % MAX_STORED_SIGNALS;
+    std::string filepath = sd_storage_path_ + "/rf_signals.txt";
+    FILE* f = fopen(filepath.c_str(), "w");
+    if (!f) return false;
+    fprintf(f, "%u\n", (unsigned)storage_signal_count_);
+    for (uint8_t i = 0; i < storage_signal_count_; i++) {
+        uint8_t idx = (storage_signal_index_ - 1 - i + MAX_STORED_SIGNALS) % MAX_STORED_SIGNALS;
+        const RFSignal& s = stored_signals_[idx];
+        fprintf(f, "%s\t%s\t%u\t%u\t%u\t%s\n",
+                s.address.c_str(), s.key.c_str(), (unsigned)s.frequency, (unsigned)s.protocol,
+                (unsigned)s.pulse_length, s.name.empty() ? "" : s.name.c_str());
     }
-    
-    // Clear metadata
-    nvs_erase_key(nvs_handle_, "count");
-    nvs_erase_key(nvs_handle_, "index");
-    nvs_set_u8(nvs_handle_, "has_signal", 0);
-    nvs_commit(nvs_handle_);
-    
-    flash_signal_count_ = 0;
-    flash_signal_index_ = 0;
-    ESP_LOGI(TAG, "[闪存] 已清除所有保存的信号");
-}
-
-bool RFModule::ClearFlashSignal(uint8_t index) {
-    // index is 0-based internal index (0 = latest signal)
-    if (!flash_storage_enabled_ || nvs_handle_ == 0 || index >= flash_signal_count_) {
-        return false;
-    }
-    
-    // Calculate the actual index in the circular buffer
-    uint8_t actual_index = (flash_signal_index_ - 1 - index + MAX_FLASH_SIGNALS) % MAX_FLASH_SIGNALS;
-    
-    // Erase the signal entry
-    char key_prefix[32];
-    snprintf(key_prefix, sizeof(key_prefix), "sig_%d_", actual_index);
-    nvs_erase_key(nvs_handle_, (std::string(key_prefix) + "addr").c_str());
-    nvs_erase_key(nvs_handle_, (std::string(key_prefix) + "key").c_str());
-    nvs_erase_key(nvs_handle_, (std::string(key_prefix) + "freq").c_str());
-    nvs_erase_key(nvs_handle_, (std::string(key_prefix) + "proto").c_str());
-    nvs_erase_key(nvs_handle_, (std::string(key_prefix) + "pulse").c_str());
-    nvs_erase_key(nvs_handle_, (std::string(key_prefix) + "name").c_str());
-    
-    // Update count
-    if (flash_signal_count_ > 0) {
-        flash_signal_count_--;
-    }
-    
-    // Update metadata
-    if (flash_signal_count_ == 0) {
-        nvs_set_u8(nvs_handle_, "has_signal", 0);
-        flash_signal_index_ = 0;
-    } else {
-        nvs_set_u8(nvs_handle_, "has_signal", 1);
-    }
-    nvs_set_u8(nvs_handle_, "count", flash_signal_count_);
-    nvs_set_u8(nvs_handle_, "index", flash_signal_index_);
-    nvs_commit(nvs_handle_);
-    
-    ESP_LOGI(TAG, "[闪存] 已清除信号索引 %d (剩余%d个信号)", index + 1, flash_signal_count_);
+    fclose(f);
+    ESP_LOGI(TAG, "[SD存储] 已清除索引 %u (剩余%u个)", (unsigned)(index + 1), (unsigned)storage_signal_count_);
     return true;
+#endif
 }
 
-bool RFModule::GetFlashSignal(uint8_t index, RFSignal& signal) const {
-    if (!flash_storage_enabled_ || nvs_handle_ == 0 || index >= flash_signal_count_) {
-        return false;
-    }
-    
-    // Calculate the actual index in the circular buffer
-    // Most recent signal is at (flash_signal_index_ - 1 + MAX_FLASH_SIGNALS) % MAX_FLASH_SIGNALS
-    // Older signals go backwards from there
-    uint8_t actual_index = (flash_signal_index_ - 1 - index + MAX_FLASH_SIGNALS) % MAX_FLASH_SIGNALS;
-    
-    char key_prefix[32];
-    snprintf(key_prefix, sizeof(key_prefix), "sig_%d_", actual_index);
-    
-    std::string addr_key = std::string(key_prefix) + "addr";
-    std::string key_key = std::string(key_prefix) + "key";
-    std::string freq_key = std::string(key_prefix) + "freq";
-    std::string proto_key = std::string(key_prefix) + "proto";
-    std::string pulse_key = std::string(key_prefix) + "pulse";
-    std::string name_key = std::string(key_prefix) + "name";
-    
-    size_t required_size = 0;
-    esp_err_t err = nvs_get_str(nvs_handle_, addr_key.c_str(), nullptr, &required_size);
-    if (err == ESP_OK && required_size > 0) {
-        char* addr_buf = new char[required_size];
-        err = nvs_get_str(nvs_handle_, addr_key.c_str(), addr_buf, &required_size);
-        if (err == ESP_OK) {
-            signal.address = addr_buf;
-            
-            required_size = 0;
-            err = nvs_get_str(nvs_handle_, key_key.c_str(), nullptr, &required_size);
-            if (err == ESP_OK && required_size > 0) {
-                char* key_buf = new char[required_size];
-                err = nvs_get_str(nvs_handle_, key_key.c_str(), key_buf, &required_size);
-                if (err == ESP_OK) {
-                    signal.key = key_buf;
-                    
-                    uint8_t freq = 0;
-                    nvs_get_u8(nvs_handle_, freq_key.c_str(), &freq);
-                    signal.frequency = (RFFrequency)freq;
-                    
-                    nvs_get_u8(nvs_handle_, proto_key.c_str(), &signal.protocol);
-                    nvs_get_u16(nvs_handle_, pulse_key.c_str(), &signal.pulse_length);
-                    
-                    // Read name field (backward compatible: if not exists, default to empty string)
-                    required_size = 0;
-                    err = nvs_get_str(nvs_handle_, name_key.c_str(), nullptr, &required_size);
-                    if (err == ESP_OK && required_size > 0) {
-                        char* name_buf = new char[required_size];
-                        err = nvs_get_str(nvs_handle_, name_key.c_str(), name_buf, &required_size);
-                        if (err == ESP_OK) {
-                            signal.name = name_buf;
-                        }
-                        delete[] name_buf;
-                    } else {
-                        // Name field doesn't exist (old data), default to empty string
-                        signal.name = "";
-                    }
-                    
-                    delete[] key_buf;
-                    delete[] addr_buf;
-                    return true;
-                }
-                delete[] key_buf;
-            }
-            delete[] addr_buf;
-        }
-    }
-    
+bool RFModule::GetStorageSignal(uint8_t index, RFSignal& signal) const {
+#if !CONFIG_RF_MODULE_ENABLE_SD_STORAGE
+    (void)index;
+    (void)signal;
     return false;
+#else
+    if (!sd_storage_enabled_ || stored_signals_ == nullptr || index >= storage_signal_count_) return false;
+    uint8_t actual_index = (storage_signal_index_ - 1 - index + MAX_STORED_SIGNALS) % MAX_STORED_SIGNALS;
+    signal = stored_signals_[actual_index];
+    return true;
+#endif
 }
 
-bool RFModule::UpdateFlashSignalName(uint8_t index, const std::string& name) {
-    // index is 0-based internal index (0 = latest signal)
-    if (!flash_storage_enabled_ || nvs_handle_ == 0 || index >= flash_signal_count_) {
-        return false;
+bool RFModule::UpdateStorageSignalName(uint8_t index, const std::string& name) {
+#if !CONFIG_RF_MODULE_ENABLE_SD_STORAGE
+    (void)index;
+    (void)name;
+    return false;
+#else
+    if (!sd_storage_enabled_ || stored_signals_ == nullptr || index >= storage_signal_count_) return false;
+    uint8_t actual_index = (storage_signal_index_ - 1 - index + MAX_STORED_SIGNALS) % MAX_STORED_SIGNALS;
+    stored_signals_[actual_index].name = name;
+    std::string filepath = sd_storage_path_ + "/rf_signals.txt";
+    FILE* f = fopen(filepath.c_str(), "w");
+    if (!f) return false;
+    fprintf(f, "%u\n", (unsigned)storage_signal_count_);
+    for (uint8_t i = 0; i < storage_signal_count_; i++) {
+        uint8_t idx = (storage_signal_index_ - 1 - i + MAX_STORED_SIGNALS) % MAX_STORED_SIGNALS;
+        const RFSignal& s = stored_signals_[idx];
+        fprintf(f, "%s\t%s\t%u\t%u\t%u\t%s\n",
+                s.address.c_str(), s.key.c_str(), (unsigned)s.frequency, (unsigned)s.protocol,
+                (unsigned)s.pulse_length, s.name.empty() ? "" : s.name.c_str());
     }
-    
-    // Calculate the actual index in the circular buffer
-    uint8_t actual_index = (flash_signal_index_ - 1 - index + MAX_FLASH_SIGNALS) % MAX_FLASH_SIGNALS;
-    
-    // Update name field
-    char key_prefix[32];
-    snprintf(key_prefix, sizeof(key_prefix), "sig_%d_", actual_index);
-    std::string name_key = std::string(key_prefix) + "name";
-    
-    esp_err_t err = nvs_set_str(nvs_handle_, name_key.c_str(), name.c_str());
-    if (err != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to update signal name: %s", esp_err_to_name(err));
-        return false;
-    }
-    
-    err = nvs_commit(nvs_handle_);
-    if (err != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to commit NVS: %s", esp_err_to_name(err));
-        return false;
-    }
-    
-    uint8_t user_index = flash_signal_count_ - index;  // Convert to 1-based user index
-    ESP_LOGI(TAG, "[闪存] 已更新信号索引 %d 的名称: %s", user_index, name.c_str());
+    fclose(f);
+    ESP_LOGI(TAG, "[SD存储] 已更新索引 %u 名称: %s", (unsigned)(index + 1), name.c_str());
     return true;
+#endif
 }
 
 bool RFModule::CheckDuplicateSignal(const RFSignal& signal, uint8_t& duplicate_index) const {
-    if (!flash_storage_enabled_ || flash_signal_count_ == 0) {
-        return false;
-    }
-    
-    // Check all signals in flash storage
-    for (uint8_t i = 0; i < flash_signal_count_; i++) {
+#if !CONFIG_RF_MODULE_ENABLE_SD_STORAGE
+    (void)signal;
+    (void)duplicate_index;
+    return false;
+#else
+    if (!sd_storage_enabled_ || storage_signal_count_ == 0) return false;
+    for (uint8_t i = 0; i < storage_signal_count_; i++) {
         RFSignal stored_signal;
-        if (GetFlashSignal(i, stored_signal)) {
-            // Compare address, key, and frequency (protocol and pulse_length may vary slightly)
-            if (stored_signal.address == signal.address &&
-                stored_signal.key == signal.key &&
-                stored_signal.frequency == signal.frequency) {
-                // 与 list_signals 保持一致：索引按录入顺序递增，最新信号索引最大
-                // GetFlashSignal(i=0) 返回最新的信号，对应用户索引 flash_signal_count_
-                // GetFlashSignal(i=1) 返回第二新的信号，对应用户索引 flash_signal_count_ - 1
-                duplicate_index = flash_signal_count_ - i;  // 1-based index for user
-                return true;
-            }
+        if (GetStorageSignal(i, stored_signal) &&
+            stored_signal.address == signal.address &&
+            stored_signal.key == signal.key &&
+            stored_signal.frequency == signal.frequency) {
+            duplicate_index = storage_signal_count_ - i;
+            return true;
         }
     }
-    
     return false;
+#endif
 }
 
 void RFModule::ResetCounters() {
@@ -1090,18 +1088,15 @@ void RFModule::CheckCaptureMode(const RFSignal& signal) {
         captured_signal_ = signal;
         capture_mode_ = false;  // Auto-exit capture mode after capture
         
-        // Save to flash storage when in capture mode
-        // SaveToFlash() will check for duplicates and return false if duplicate
-        // Only set has_captured_signal_ if save was successful
-        if (flash_storage_enabled_) {
-            if (SaveToFlash()) {
-                has_captured_signal_ = true;  // Only set if save succeeded
+        // Save to storage (SD) when in capture mode
+        if (sd_storage_enabled_) {
+            if (SaveToStorage()) {
+                has_captured_signal_ = true;
             } else {
-                // Save failed (likely due to duplicate), but keep captured_signal_ for tool to check
-                has_captured_signal_ = true;  // Still set so tool can detect and throw error
+                has_captured_signal_ = true;  // Still set so tool can detect duplicate error
             }
         } else {
-            has_captured_signal_ = true;  // If flash storage disabled, still set the flag
+            has_captured_signal_ = true;
         }
     }
 }

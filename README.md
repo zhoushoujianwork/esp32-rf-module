@@ -8,7 +8,7 @@ ESP32 RF 收发模块库，支持 315MHz 和 433MHz 双频段 RF 信号收发。
 
 - ✅ 支持 315MHz 和 433MHz 双频段收发
 - ✅ 信号捕获和重放
-- ✅ 信号持久化存储（NVS Flash，最多10个信号）
+- ✅ 信号持久化存储（main 分支：NVS Flash；CC1101 分支：SD 卡，见下文）
 - ✅ **信号名称/主题管理**：支持为信号设置设备名称（如"卧室灯开关"、"大门开"等）
 - ✅ **按名称发送**：支持通过设备名称发送信号，无需记忆索引
 - ✅ **自然语言支持**：AI 可从自然语言中提取设备名称（如"录制大门信号"→"大门"）
@@ -30,6 +30,15 @@ ESP32 RF 收发模块库，支持 315MHz 和 433MHz 双频段 RF 信号收发。
 | 6 | V | 电源 (3.3V) |
 
 需要配置 4 个 GPIO 引脚：`RF_TX_315_PIN`, `RF_RX_315_PIN`, `RF_TX_433_PIN`, `RF_RX_433_PIN`
+
+### CC1101 分支（独立分支，不合并 main）
+
+在 `feature/cc1101` 或 `cc1101` 分支中，支持 TI CC1101 单芯片 SPI 收发，与「仅 GPIO 双频段」模式二选一或按需共存。
+
+- **用途**：使用 CC1101 做 315/433MHz OOK 收发，与现有 RFSignal/MCP/存储等上层接口一致。
+- **配置**：`CONFIG_RF_MODULE_ENABLE_CC1101=1`；信号存储为 **SD 卡**（`CONFIG_RF_MODULE_ENABLE_SD_STORAGE=1`）。**ReaderRole 下不再使用 NVS**，持久化仅通过 SD 卡；主工程负责挂载 SD（如 `/sdcard`），RFModule 在 `Begin()` 后由主工程显式调用 `EnableSDStorage("/sdcard")`，再读写例如 `path/rf_signals.txt`。
+- **引脚**：CC1101 使用 SPI：CS、SCK、MOSI、MISO、GDO0、GDO2。构造函数中 `tx433`=CS、`rx433`=GDO0、`tx315`=GDO2；调用 `Begin(spi_host, sck, mosi, miso)` 传入 SPI 引脚。若与 SD 卡同板，可共用同一 SPI host、不同 CS，主工程先挂载 SD 再初始化 CC1101。
+- **实现说明**：驱动与集成均在仓库内实现，参考 CC1101 数据手册及 arduino_cc1101 行为，无外部代码依赖。
 
 ## 硬件设计
 

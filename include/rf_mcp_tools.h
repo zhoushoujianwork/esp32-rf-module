@@ -62,7 +62,7 @@ inline void RegisterRFMcpTools(RFModule* rf_module) {
         "复制/克隆RF信号（自动识别315MHz或433MHz频率）。"
         "调用此工具并等待用户按下遥控器，系统会自动接收并保存信号。"
         "RF模块同时监听两个频率并自动识别信号频率。"
-        "所有接收到的信号都会自动保存到闪存（最多10个信号，循环缓冲区）。"
+        "所有接收到的信号都会自动保存到存储（最多10个信号，循环缓冲区）。"
         "这是一个阻塞调用，最多等待10秒接收信号。"
         "返回值说明："
         "- 成功接收信号：返回JSON对象，包含address, key, frequency, protocol, pulse_length, name, is_duplicate=false。"
@@ -117,16 +117,16 @@ inline void RegisterRFMcpTools(RFModule* rf_module) {
                         signal.name = signal_name;
                     }
                     
-                    // Explicitly save to flash storage for self.rf.copy tool
+                    // Explicitly save to storage for self.rf.copy tool
                     // Check if storage is full before saving
-                    if (rf_module->IsFlashStorageEnabled()) {
-                        uint8_t current_count = rf_module->GetFlashSignalCount();
+                    if (rf_module->IsSDStorageEnabled()) {
+                        uint8_t current_count = rf_module->GetStorageSignalCount();
                         if (current_count >= 10) {
                             ESP_LOGW(TAG_RF_MCP, "[复制] ⚠️ 信号存储已满 (10/10)，无法保存新信号");
                             throw std::runtime_error("Signal storage is full (10/10). Please use self.rf.list_signals to see saved signals, or clear some signals.");
                         }
-                        if (!rf_module->SaveToFlash()) {
-                            ESP_LOGW(TAG_RF_MCP, "[复制] ⚠️ 保存信号到闪存失败");
+                        if (!rf_module->SaveToStorage()) {
+                            ESP_LOGW(TAG_RF_MCP, "[复制] ⚠️ 保存信号到存储失败");
                         }
                     }
                     
@@ -135,7 +135,7 @@ inline void RegisterRFMcpTools(RFModule* rf_module) {
                     bool is_duplicate = rf_module->CheckDuplicateSignal(signal, duplicate_index);
                     
                     if (is_duplicate) {
-                        ESP_LOGW(TAG_RF_MCP, "[复制] ⚠️ 接收到重复信号: %s%s (%sMHz) - 与闪存中索引%d的信号相同", 
+                        ESP_LOGW(TAG_RF_MCP, "[复制] ⚠️ 接收到重复信号: %s%s (%sMHz) - 与存储中索引%d的信号相同", 
                                 signal.address.c_str(), signal.key.c_str(),
                                 signal.frequency == RF_315MHZ ? "315" : "433", duplicate_index);
                     } else {
@@ -178,7 +178,7 @@ inline void RegisterRFMcpTools(RFModule* rf_module) {
                         bool is_duplicate = rf_module->CheckDuplicateSignal(signal, duplicate_index);
                         
                         if (is_duplicate) {
-                            ESP_LOGW(TAG_RF_MCP, "[复制] ⚠️ 接收到重复信号: %s%s (%sMHz) - 与闪存中索引%d的信号相同", 
+                            ESP_LOGW(TAG_RF_MCP, "[复制] ⚠️ 接收到重复信号: %s%s (%sMHz) - 与存储中索引%d的信号相同", 
                                     signal.address.c_str(), signal.key.c_str(),
                                     signal.frequency == RF_315MHZ ? "315" : "433", duplicate_index);
                             
@@ -196,17 +196,17 @@ inline void RegisterRFMcpTools(RFModule* rf_module) {
                             return json;
                         }
                         
-                        // Explicitly save to flash storage for self.rf.copy tool
+                        // Explicitly save to storage for self.rf.copy tool
                         // Check if storage is full before saving
-                        if (rf_module->IsFlashStorageEnabled()) {
-                            uint8_t current_count = rf_module->GetFlashSignalCount();
+                        if (rf_module->IsSDStorageEnabled()) {
+                            uint8_t current_count = rf_module->GetStorageSignalCount();
                             if (current_count >= 10) {
                                 ESP_LOGW(TAG_RF_MCP, "[复制] ⚠️ 信号存储已满 (10/10)，无法保存新信号");
                                 throw std::runtime_error("Signal storage is full (10/10). Please use self.rf.list_signals to see saved signals, or clear some signals.");
                             }
-                            if (!rf_module->SaveToFlash()) {
-                                ESP_LOGE(TAG_RF_MCP, "[复制] ✗ 保存信号到闪存失败");
-                                throw std::runtime_error("Failed to save signal to flash storage.");
+                            if (!rf_module->SaveToStorage()) {
+                                ESP_LOGE(TAG_RF_MCP, "[复制] ✗ 保存信号到存储失败");
+                                throw std::runtime_error("Failed to save signal to storage.");
                             }
                         }
                         
@@ -239,12 +239,12 @@ inline void RegisterRFMcpTools(RFModule* rf_module) {
     mcp_server.AddTool("self.rf.get_status",
         "获取RF模块实时状态和统计信息（非阻塞查询）。"
         "返回：enabled状态、send_count、receive_count、last_signal（最近接收的信号）和saved_signals_count。"
-        "saved_signals_count字段显示闪存中实际保存的信号数量（最多10个，循环缓冲区）。"
+        "saved_signals_count字段显示存储中实际保存的信号数量（最多10个，循环缓冲区）。"
         "使用此工具可以快速检查模块状态和最新信号，无需阻塞。"
         "注意：要列出所有保存的信号及其索引，请使用 self.rf.list_signals。"
         "last_signal字段包含最新信号（address, key, frequency, protocol, pulse_length, name）。"
         "此工具不会返回完整的保存信号列表，请使用 self.rf.list_signals 查看。"
-        "重复信号（地址+按键+频率相同）会被检测并警告，但仍会保存到闪存。",
+        "重复信号（地址+按键+频率相同）会被检测并警告，但仍会保存到存储。",
         PropertyList(),
         [rf_module](const PropertyList& properties) -> ReturnValue {
             cJSON* json = cJSON_CreateObject();
@@ -264,11 +264,11 @@ inline void RegisterRFMcpTools(RFModule* rf_module) {
                 cJSON_AddItemToObject(json, "last_signal", last);
             }
             
-            // Add flash storage count only (not the full list to avoid confusion with list_signals)
-            if (rf_module->IsFlashStorageEnabled()) {
-                uint8_t flash_count = rf_module->GetFlashSignalCount();
+            // Add storage count only (not the full list to avoid confusion with list_signals)
+            if (rf_module->IsSDStorageEnabled()) {
+                uint8_t flash_count = rf_module->GetStorageSignalCount();
                 cJSON_AddNumberToObject(json, "saved_signals_count", flash_count);
-                ESP_LOGI(TAG_RF_MCP, "[状态] 闪存中保存了 %d 个信号", flash_count);
+                ESP_LOGI(TAG_RF_MCP, "[状态] 存储中保存了 %d 个信号", flash_count);
             } else {
                 cJSON_AddNumberToObject(json, "saved_signals_count", 0);
             }
@@ -281,7 +281,7 @@ inline void RegisterRFMcpTools(RFModule* rf_module) {
         "这是捕捉信号的替代方式（不用于复制/克隆）。"
         "调用此工具并等待用户按下遥控器。"
         "RF模块自动检测315MHz和433MHz频率的信号。"
-        "捕捉到的信号会自动保存到闪存（最多10个信号，循环缓冲区）。"
+        "捕捉到的信号会自动保存到存储（最多10个信号，循环缓冲区）。"
         "返回值说明："
         "- 成功捕捉信号：返回JSON对象，包含address, key, frequency, protocol, pulse_length, is_duplicate=false。"
         "- 检测到重复信号：工具会抛出异常（error响应），错误消息为'信号保存失败：检测到重复信号...'，此时信号不会被保存。这不是超时，而是重复信号错误。"
@@ -320,7 +320,7 @@ inline void RegisterRFMcpTools(RFModule* rf_module) {
                 
                 if (is_duplicate) {
                     rf_module->DisableCaptureMode();
-                    ESP_LOGW(TAG_RF_MCP, "[捕捉] ⚠️ 接收到重复信号: %s%s (%sMHz) - 与闪存中索引%d的信号相同", 
+                    ESP_LOGW(TAG_RF_MCP, "[捕捉] ⚠️ 接收到重复信号: %s%s (%sMHz) - 与存储中索引%d的信号相同", 
                             signal.address.c_str(), signal.key.c_str(),
                             signal.frequency == RF_315MHZ ? "315" : "433", duplicate_index);
                     
@@ -338,24 +338,24 @@ inline void RegisterRFMcpTools(RFModule* rf_module) {
                 }
                 
                 // Check if storage is full (capture mode saves via CheckCaptureMode, but we should verify)
-                if (rf_module->IsFlashStorageEnabled()) {
-                    uint8_t current_count = rf_module->GetFlashSignalCount();
+                if (rf_module->IsSDStorageEnabled()) {
+                    uint8_t current_count = rf_module->GetStorageSignalCount();
                     if (current_count >= 10) {
                         ESP_LOGW(TAG_RF_MCP, "[捕捉] ⚠️ 信号存储已满 (10/10)，无法保存新信号");
                         rf_module->DisableCaptureMode();
                         throw std::runtime_error("Signal storage is full (10/10). Please use self.rf.list_signals to see saved signals, or clear some signals.");
                     }
                     
-                    // Verify that SaveToFlash was successful (CheckCaptureMode should have called it)
-                    // If SaveToFlash failed (e.g., due to duplicate), it would have returned false
+                    // Verify that SaveToStorage was successful (CheckCaptureMode should have called it)
+                    // If SaveToStorage failed (e.g., due to duplicate), it would have returned false
                     // But since we already checked for duplicate above, this should succeed
                     // However, we can verify by checking if the signal count increased
                     uint8_t count_before = current_count;
-                    // Re-check count after a small delay to ensure SaveToFlash completed
+                    // Re-check count after a small delay to ensure SaveToStorage completed
                     vTaskDelay(pdMS_TO_TICKS(10));
-                    uint8_t count_after = rf_module->GetFlashSignalCount();
+                    uint8_t count_after = rf_module->GetStorageSignalCount();
                     if (count_after <= count_before) {
-                        ESP_LOGW(TAG_RF_MCP, "[捕捉] ⚠️ 信号可能未成功保存到闪存");
+                        ESP_LOGW(TAG_RF_MCP, "[捕捉] ⚠️ 信号可能未成功保存到存储");
                     }
                 }
                 
@@ -395,7 +395,7 @@ inline void RegisterRFMcpTools(RFModule* rf_module) {
                     
                     if (is_duplicate) {
                         rf_module->DisableCaptureMode();
-                        ESP_LOGW(TAG_RF_MCP, "[捕捉] ⚠️ 接收到重复信号: %s%s (%sMHz) - 与闪存中索引%d的信号相同", 
+                        ESP_LOGW(TAG_RF_MCP, "[捕捉] ⚠️ 接收到重复信号: %s%s (%sMHz) - 与存储中索引%d的信号相同", 
                                 signal.address.c_str(), signal.key.c_str(),
                                 signal.frequency == RF_315MHZ ? "315" : "433", duplicate_index);
                         
@@ -412,8 +412,8 @@ inline void RegisterRFMcpTools(RFModule* rf_module) {
                     }
                     
                     // Check if storage is full (capture mode saves via CheckCaptureMode, but we should verify)
-                    if (rf_module->IsFlashStorageEnabled()) {
-                        uint8_t current_count = rf_module->GetFlashSignalCount();
+                    if (rf_module->IsSDStorageEnabled()) {
+                        uint8_t current_count = rf_module->GetStorageSignalCount();
                         if (current_count >= 10) {
                             ESP_LOGW(TAG_RF_MCP, "[捕捉] ⚠️ 信号存储已满 (10/10)，无法保存新信号");
                             rf_module->DisableCaptureMode();
@@ -454,7 +454,7 @@ inline void RegisterRFMcpTools(RFModule* rf_module) {
                     
                     if (is_duplicate) {
                         rf_module->DisableCaptureMode();
-                        ESP_LOGW(TAG_RF_MCP, "[捕捉] ⚠️ 接收到重复信号: %s%s (%sMHz) - 与闪存中索引%d的信号相同", 
+                        ESP_LOGW(TAG_RF_MCP, "[捕捉] ⚠️ 接收到重复信号: %s%s (%sMHz) - 与存储中索引%d的信号相同", 
                                 signal.address.c_str(), signal.key.c_str(),
                                 signal.frequency == RF_315MHZ ? "315" : "433", duplicate_index);
                         
@@ -471,8 +471,8 @@ inline void RegisterRFMcpTools(RFModule* rf_module) {
                     }
                     
                     // Check if storage is full
-                    if (rf_module->IsFlashStorageEnabled()) {
-                        uint8_t current_count = rf_module->GetFlashSignalCount();
+                    if (rf_module->IsSDStorageEnabled()) {
+                        uint8_t current_count = rf_module->GetStorageSignalCount();
                         if (current_count >= 10) {
                             ESP_LOGW(TAG_RF_MCP, "[捕捉] ⚠️ 信号存储已满 (10/10)，无法保存新信号");
                             rf_module->DisableCaptureMode();
@@ -508,7 +508,7 @@ inline void RegisterRFMcpTools(RFModule* rf_module) {
         "重播/发送最后接收的信号（复制/克隆的第二步）。"
         "这是完成复制/克隆信号的第二步：在调用 self.rf.copy（步骤1）复制信号后，"
         "调用此工具重播/发送该信号，完成复制/克隆操作。"
-        "所有通过 self.rf.copy 复制的信号都会自动保存到闪存（最多10个信号，循环缓冲区）。"
+        "所有通过 self.rf.copy 复制的信号都会自动保存到存储（最多10个信号，循环缓冲区）。"
         "此工具重播/发送最近复制的信号。"
         "重要：复制/克隆信号需要两个步骤：(1) self.rf.copy - 复制信号，(2) self.rf.replay - 发送/重播信号。"
         "只有完成这两个步骤后，信号才被复制/克隆。"
@@ -552,9 +552,9 @@ inline void RegisterRFMcpTools(RFModule* rf_module) {
         });
 
     mcp_server.AddTool("self.rf.list_signals",
-        "列出闪存中所有保存的RF信号及其索引（1-based）。"
+        "列出存储中所有保存的RF信号及其索引（1-based）。"
         "返回：total_count（实际保存的信号数量，最多10个）和signals数组。"
-        "闪存使用循环缓冲区，最大容量为10个信号。"
+        "存储使用循环缓冲区，最大容量为10个信号。"
         "当缓冲区满时，新信号会覆盖最旧的信号。"
         "信号索引按录入顺序递增：第一个录入的信号索引为1，最新录入的信号索引最大。"
         "重复信号（地址+按键+频率相同）在接收时会被检测并警告，但仍会保存。"
@@ -563,19 +563,19 @@ inline void RegisterRFMcpTools(RFModule* rf_module) {
         "参数：无",
         PropertyList(),
         [rf_module](const PropertyList& properties) -> ReturnValue {
-            // Check if flash storage is enabled
-            if (!rf_module->IsFlashStorageEnabled()) {
+            // Check if signal storage is enabled
+            if (!rf_module->IsSDStorageEnabled()) {
                 cJSON* json = cJSON_CreateObject();
                 cJSON_AddNumberToObject(json, "total_count", 0);
                 cJSON* signals = cJSON_CreateArray();
                 cJSON_AddItemToObject(json, "signals", signals);
-                ESP_LOGW(TAG_RF_MCP, "[列表] Flash storage not enabled");
+                ESP_LOGW(TAG_RF_MCP, "[列表] Signal storage not enabled");
                 return json;
             }
             
-            uint8_t flash_count = rf_module->GetFlashSignalCount();
+            uint8_t flash_count = rf_module->GetStorageSignalCount();
             
-            ESP_LOGI(TAG_RF_MCP, "[列表] 闪存中保存了 %d 个信号", flash_count);
+            ESP_LOGI(TAG_RF_MCP, "[列表] 存储中保存了 %d 个信号", flash_count);
             
             cJSON* json = cJSON_CreateObject();
             cJSON_AddNumberToObject(json, "total_count", flash_count);
@@ -584,9 +584,9 @@ inline void RegisterRFMcpTools(RFModule* rf_module) {
                 cJSON* signals = cJSON_CreateArray();
                 for (uint8_t i = 0; i < flash_count; i++) {
                     RFSignal signal;
-                    if (rf_module->GetFlashSignal(i, signal)) {
+                    if (rf_module->GetStorageSignal(i, signal)) {
                         // 用户看到的索引是从1开始的（1-based），按录入顺序递增
-                        // GetFlashSignal(i=0) 返回最新的信号，所以 user_index = flash_count - i
+                        // GetStorageSignal(i=0) 返回最新的信号，所以 user_index = flash_count - i
                         // 例如：如果有7个信号，最新的(i=0)索引为7，最旧的(i=6)索引为1
                         uint8_t user_index = flash_count - i;  // 最新信号索引最大，按录入顺序递增
                         
@@ -622,16 +622,16 @@ inline void RegisterRFMcpTools(RFModule* rf_module) {
         "使用 self.rf.list_signals 查看所有可用信号（最多10个）及其索引。"
         "信号默认发送3次（行业标准）。"
         "信号按原始频率发送，不支持修改频率。"
-        "注意：闪存最多可保存10个信号（循环缓冲区）。"
+        "注意：存储最多可保存10个信号（循环缓冲区）。"
         "如果尝试发送不存在的索引，会抛出错误。"
         "参数：index（整数，1-based，必需，范围：1到saved_signals_count）",
         PropertyList({
             Property("index", kPropertyTypeInteger)
         }),
         [rf_module](const PropertyList& properties) -> ReturnValue {
-            // Check if flash storage is enabled
-            if (!rf_module->IsFlashStorageEnabled()) {
-                throw std::runtime_error("Flash storage not enabled. Cannot send signal by index.");
+            // Check if signal storage is enabled
+            if (!rf_module->IsSDStorageEnabled()) {
+                throw std::runtime_error("Signal storage not enabled. Cannot send signal by index.");
             }
             
             int user_index = properties["index"].value<int>();
@@ -640,21 +640,21 @@ inline void RegisterRFMcpTools(RFModule* rf_module) {
                 throw std::runtime_error("Index must be >= 1 (1-based indexing)");
             }
             
-            uint8_t flash_count = rf_module->GetFlashSignalCount();
+            uint8_t flash_count = rf_module->GetStorageSignalCount();
             if (user_index > flash_count) {
                 throw std::runtime_error("Index " + std::to_string(user_index) + " exceeds available signals count (" + std::to_string(flash_count) + ")");
             }
             
             // Convert 1-based user index to 0-based internal index
             // 用户索引按录入顺序递增：第一个录入的信号索引为1，最新录入的信号索引最大
-            // GetFlashSignal(i=0) 返回最新的信号，对应用户索引 flash_count
-            // GetFlashSignal(i=flash_count-1) 返回最旧的信号，对应用户索引 1
+            // GetStorageSignal(i=0) 返回最新的信号，对应用户索引 flash_count
+            // GetStorageSignal(i=flash_count-1) 返回最旧的信号，对应用户索引 1
             // user_index = flash_count -> internal_index = 0 (latest)
             // user_index = 1 -> internal_index = flash_count - 1 (oldest)
             uint8_t internal_index = flash_count - user_index;
             
             RFSignal signal;
-            if (!rf_module->GetFlashSignal(internal_index, signal)) {
+            if (!rf_module->GetStorageSignal(internal_index, signal)) {
                 throw std::runtime_error("Failed to retrieve signal at index " + std::to_string(user_index));
             }
             
@@ -696,9 +696,9 @@ inline void RegisterRFMcpTools(RFModule* rf_module) {
             Property("name", kPropertyTypeString)
         }),
         [rf_module](const PropertyList& properties) -> ReturnValue {
-            // Check if flash storage is enabled
-            if (!rf_module->IsFlashStorageEnabled()) {
-                throw std::runtime_error("Flash storage not enabled. Cannot set signal name.");
+            // Check if signal storage is enabled
+            if (!rf_module->IsSDStorageEnabled()) {
+                throw std::runtime_error("Signal storage not enabled. Cannot set signal name.");
             }
             
             int user_index = properties["index"].value<int>();
@@ -710,26 +710,26 @@ inline void RegisterRFMcpTools(RFModule* rf_module) {
             
             // Allow empty string to clear name
             
-            uint8_t flash_count = rf_module->GetFlashSignalCount();
+            uint8_t flash_count = rf_module->GetStorageSignalCount();
             if (user_index > flash_count) {
                 throw std::runtime_error("Index " + std::to_string(user_index) + " exceeds available signals count (" + std::to_string(flash_count) + ")");
             }
             
             // Convert 1-based user index to 0-based internal index
             // 用户索引按录入顺序递增：第一个录入的信号索引为1，最新录入的信号索引最大
-            // GetFlashSignal(i=0) 返回最新的信号，对应用户索引 flash_count
-            // GetFlashSignal(i=flash_count-1) 返回最旧的信号，对应用户索引 1
+            // GetStorageSignal(i=0) 返回最新的信号，对应用户索引 flash_count
+            // GetStorageSignal(i=flash_count-1) 返回最旧的信号，对应用户索引 1
             // user_index = flash_count -> internal_index = 0 (latest)
             // user_index = 1 -> internal_index = flash_count - 1 (oldest)
             uint8_t internal_index = flash_count - user_index;
             
             // Get signal info before updating (for logging)
             RFSignal signal;
-            if (!rf_module->GetFlashSignal(internal_index, signal)) {
+            if (!rf_module->GetStorageSignal(internal_index, signal)) {
                 throw std::runtime_error("Failed to retrieve signal at index " + std::to_string(user_index));
             }
             
-            if (!rf_module->UpdateFlashSignalName(internal_index, name)) {
+            if (!rf_module->UpdateStorageSignalName(internal_index, name)) {
                 throw std::runtime_error("Failed to update signal name at index " + std::to_string(user_index));
             }
             
@@ -768,9 +768,9 @@ inline void RegisterRFMcpTools(RFModule* rf_module) {
             Property("name", kPropertyTypeString)
         }),
         [rf_module](const PropertyList& properties) -> ReturnValue {
-            // Check if flash storage is enabled
-            if (!rf_module->IsFlashStorageEnabled()) {
-                throw std::runtime_error("Flash storage not enabled. Cannot send signal by name.");
+            // Check if signal storage is enabled
+            if (!rf_module->IsSDStorageEnabled()) {
+                throw std::runtime_error("Signal storage not enabled. Cannot send signal by name.");
             }
             
             std::string name = properties["name"].value<std::string>();
@@ -779,7 +779,7 @@ inline void RegisterRFMcpTools(RFModule* rf_module) {
                 throw std::runtime_error("Name cannot be empty.");
             }
             
-            uint8_t flash_count = rf_module->GetFlashSignalCount();
+            uint8_t flash_count = rf_module->GetStorageSignalCount();
             if (flash_count == 0) {
                 throw std::runtime_error("No signals saved. Use self.rf.copy to save signals first.");
             }
@@ -792,7 +792,7 @@ inline void RegisterRFMcpTools(RFModule* rf_module) {
             // Search from oldest to newest (index 1 to flash_count)
             for (uint8_t i = 0; i < flash_count; i++) {
                 RFSignal signal;
-                if (rf_module->GetFlashSignal(i, signal)) {
+                if (rf_module->GetStorageSignal(i, signal)) {
                     if (signal.name == name) {
                         found_signal = signal;
                         found_index = flash_count - i;  // Convert to 1-based user index
@@ -828,7 +828,7 @@ inline void RegisterRFMcpTools(RFModule* rf_module) {
         });
 
     mcp_server.AddTool("self.rf.clear_signals",
-        "清理闪存中保存的RF信号。"
+        "清理存储中保存的RF信号。"
         "可以清理所有信号，或按索引清理特定信号。"
         "清理后，使用 self.rf.list_signals 验证剩余信号。"
         "参数：clear_all（布尔值，可选，默认false）- 如果为true，清理所有信号；"
@@ -840,11 +840,11 @@ inline void RegisterRFMcpTools(RFModule* rf_module) {
             Property("index", kPropertyTypeInteger, -1)  // Default -1 means not provided
         }),
         [rf_module](const PropertyList& properties) -> ReturnValue {
-            if (!rf_module->IsFlashStorageEnabled()) {
-                throw std::runtime_error("Flash storage not enabled. Cannot clear signals.");
+            if (!rf_module->IsSDStorageEnabled()) {
+                throw std::runtime_error("Signal storage not enabled. Cannot clear signals.");
             }
             
-            uint8_t initial_count = rf_module->GetFlashSignalCount();
+            uint8_t initial_count = rf_module->GetStorageSignalCount();
             
             // Check if clear_all is requested
             bool clear_all = false;
@@ -864,7 +864,7 @@ inline void RegisterRFMcpTools(RFModule* rf_module) {
             
             if (clear_all) {
                 // Clear all signals
-                rf_module->ClearFlash();
+                rf_module->ClearStorage();
                 ESP_LOGI(TAG_RF_MCP, "[清理] 已清除所有信号 (共%d个)", initial_count);
                 
                 cJSON* json = cJSON_CreateObject();
@@ -886,22 +886,23 @@ inline void RegisterRFMcpTools(RFModule* rf_module) {
                     throw std::runtime_error("Index " + std::to_string(user_index) + " exceeds available signals count (" + std::to_string(initial_count) + ")");
                 }
                 
-                // Convert 1-based user index to 0-based internal index
-                uint8_t internal_index = user_index - 1;
+                // Convert 1-based user index to 0-based internal index (same as list_signals/send_by_index)
+                // user_index 1 = oldest = internal (initial_count-1), user_index initial_count = newest = internal 0
+                uint8_t internal_index = initial_count - user_index;
                 
                 // Get signal info before clearing (for logging)
                 RFSignal signal;
                 std::string signal_info = "";
-                if (rf_module->GetFlashSignal(internal_index, signal)) {
+                if (rf_module->GetStorageSignal(internal_index, signal)) {
                     signal_info = signal.address + signal.key + " (" + 
                                  (signal.frequency == RF_315MHZ ? "315" : "433") + "MHz)";
                 }
                 
-                if (!rf_module->ClearFlashSignal(internal_index)) {
+                if (!rf_module->ClearStorageSignal(internal_index)) {
                     throw std::runtime_error("Failed to clear signal at index " + std::to_string(user_index));
                 }
                 
-                uint8_t remaining_count = rf_module->GetFlashSignalCount();
+                uint8_t remaining_count = rf_module->GetStorageSignalCount();
                 ESP_LOGI(TAG_RF_MCP, "[清理] 已清除信号索引 %d%s (剩余%d个信号)", 
                         user_index, 
                         signal_info.empty() ? "" : (" " + signal_info).c_str(),

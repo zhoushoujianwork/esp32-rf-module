@@ -35,10 +35,32 @@ menu "ESP32 RF Module Configuration"
             Enable support for 315MHz RF signals.
             Requires TCSwitch component.
 
+    config RF_MODULE_ENABLE_CC1101
+        bool "Enable CC1101 Transceiver Support"
+        default n
+        help
+            Enable CC1101 sub-1GHz transceiver (SPI).
+            When enabled, use Begin(spi_host, sck, mosi, miso).
+            Pin mapping: tx433=CS, rx433=GDO0, tx315=GDO2.
+            Mutually exclusive with GPIO 433/315 in same build or use different pins.
+
+    config RF_MODULE_ENABLE_SD_STORAGE
+        bool "Enable SD Card Signal Storage"
+        default n
+        help
+            Store signals on SD card (path set by main project).
+            SD mount is done by main; RF module only reads/writes files on path.
+
+    config RF_MODULE_MAX_STORED_SIGNALS
+        int "Maximum Stored Signals (SD or NVS)"
+        range 1 20
+        default 10
+        help
+            Maximum number of signals to store (flash or SD).
+
     config RF_MODULE_ENABLE_MCP_TOOLS
         bool "Enable MCP Tools"
         default y
-        depends on RF_MODULE_ENABLE_FLASH_STORAGE
         help
             Enable MCP (Model Context Protocol) tools integration.
             Provides self.rf.* tools for AI-driven device control.

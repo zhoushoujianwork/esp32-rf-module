@@ -13,15 +13,6 @@
  * All values default to enabled/backward compatible settings.
  */
 
-// Flash Storage Configuration
-#ifndef CONFIG_RF_MODULE_ENABLE_FLASH_STORAGE
-#define CONFIG_RF_MODULE_ENABLE_FLASH_STORAGE 1
-#endif
-
-#ifndef CONFIG_RF_MODULE_MAX_FLASH_SIGNALS
-#define CONFIG_RF_MODULE_MAX_FLASH_SIGNALS 10
-#endif
-
 // Frequency Support Configuration
 #ifndef CONFIG_RF_MODULE_ENABLE_433MHZ
 #define CONFIG_RF_MODULE_ENABLE_433MHZ 1
@@ -29,6 +20,20 @@
 
 #ifndef CONFIG_RF_MODULE_ENABLE_315MHZ
 #define CONFIG_RF_MODULE_ENABLE_315MHZ 1
+#endif
+
+// CC1101 Transceiver Configuration (optional, for feature/cc1101 branch)
+#ifndef CONFIG_RF_MODULE_ENABLE_CC1101
+#define CONFIG_RF_MODULE_ENABLE_CC1101 0
+#endif
+
+#ifndef CONFIG_RF_MODULE_MAX_STORED_SIGNALS
+#define CONFIG_RF_MODULE_MAX_STORED_SIGNALS 10
+#endif
+
+// SD Storage Configuration (replaces NVS when enabled)
+#ifndef CONFIG_RF_MODULE_ENABLE_SD_STORAGE
+#define CONFIG_RF_MODULE_ENABLE_SD_STORAGE 0
 #endif
 
 // MCP Tools Configuration

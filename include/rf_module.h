@@ -6,13 +6,12 @@
 #include <cstdint>
 #include "rf_module_config.h"
 
-#if CONFIG_RF_MODULE_ENABLE_FLASH_STORAGE
-#include <nvs.h>  // NVS available on all ESP32 series chips
-#endif
-
 // Forward declarations
 class RCSwitch;
 class TCSwitch;
+#if CONFIG_RF_MODULE_ENABLE_CC1101
+class CC1101;
+#endif
 
 enum RFFrequency {
     RF_433MHZ = 0,
@@ -38,6 +37,10 @@ public:
     
     // Initialization
     void Begin();
+#if CONFIG_RF_MODULE_ENABLE_CC1101
+    /** CC1101 mode: call after SPI bus is initialized by main. Uses tx433=CS, rx433=GDO0, tx315=GDO2. */
+    void Begin(int spi_host, int sck_pin, int mosi_pin, int miso_pin);
+#endif
     void End();
     
     // Send functions
@@ -89,18 +92,18 @@ public:
     RFSignal GetLastReceived() const { return last_received_; }
     void ClearReplayBuffer();
     
-    // Flash persistence functions (NVS available on all ESP32 series chips)
-    void EnableFlashStorage(const char* namespace_name = "rf_replay");
-    void DisableFlashStorage();
-    bool SaveToFlash();
-    bool LoadFromFlash();
-    void ClearFlash();
-    bool ClearFlashSignal(uint8_t index);  // Clear a single signal by index (0-based, internal index)
-    uint8_t GetFlashSignalCount() const { return flash_signal_count_; }
-    bool GetFlashSignal(uint8_t index, RFSignal& signal) const;
-    bool UpdateFlashSignalName(uint8_t index, const std::string& name);  // Update name for a signal by index (0-based, internal index)
-    bool IsFlashStorageEnabled() const { return flash_storage_enabled_; }
-    bool CheckDuplicateSignal(const RFSignal& signal, uint8_t& duplicate_index) const;  // Check if signal already exists in flash storage
+    // Signal storage (SD card when CONFIG_RF_MODULE_ENABLE_SD_STORAGE; main project mounts SD)
+    void EnableSDStorage(const char* path);
+    void DisableSDStorage();
+    bool SaveToStorage();
+    bool LoadFromStorage();
+    void ClearStorage();
+    bool ClearStorageSignal(uint8_t index);
+    uint8_t GetStorageSignalCount() const;
+    bool GetStorageSignal(uint8_t index, RFSignal& signal) const;
+    bool UpdateStorageSignalName(uint8_t index, const std::string& name);
+    bool IsSDStorageEnabled() const;
+    bool CheckDuplicateSignal(const RFSignal& signal, uint8_t& duplicate_index) const;
     
     // Status
     bool IsEnabled() const { return enabled_; }
@@ -115,7 +118,12 @@ private:
     // Switch instances
     RCSwitch* rc_switch_;  // 433MHz
     TCSwitch* tc_switch_;  // 315MHz
-    
+
+#if CONFIG_RF_MODULE_ENABLE_CC1101
+    CC1101* cc1101_;
+    bool cc1101_initialized_;
+#endif
+
     // Current frequency
     RFFrequency current_frequency_;
     
@@ -150,13 +158,13 @@ private:
     bool receive_enabled_433_;
     bool receive_enabled_315_;
     
-    // Flash storage (NVS available on all ESP32 series chips)
-    static constexpr uint8_t MAX_FLASH_SIGNALS = CONFIG_RF_MODULE_MAX_FLASH_SIGNALS;  // Maximum number of signals to store in flash (configurable via CMake/Kconfig)
-    bool flash_storage_enabled_;
-    nvs_handle_t nvs_handle_;
-    std::string flash_namespace_;
-    uint8_t flash_signal_count_;  // Number of signals currently stored in flash
-    uint8_t flash_signal_index_;  // Current write index (circular buffer)
+    // Signal storage (SD file when CONFIG_RF_MODULE_ENABLE_SD_STORAGE)
+    static constexpr uint8_t MAX_STORED_SIGNALS = CONFIG_RF_MODULE_MAX_STORED_SIGNALS;
+    bool sd_storage_enabled_;
+    std::string sd_storage_path_;
+    RFSignal* stored_signals_;
+    uint8_t storage_signal_count_;
+    uint8_t storage_signal_index_;
     
     // Status
     bool enabled_;
@@ -166,6 +174,11 @@ private:
     uint8_t HexToNum(char c);
     void SendSignalRCSwitch(const std::string& address, const std::string& key, uint16_t pulse_length, uint8_t protocol);
     void SendSignalTCSwitch(const std::string& address, const std::string& key, uint16_t pulse_length, uint8_t protocol);
+#if CONFIG_RF_MODULE_ENABLE_CC1101
+    void SetupCC1101ForRx(int frequency_mhz);
+    void SetupCC1101ForTx(int frequency_mhz);
+    void SendSignalCC1101(const std::string& address, const std::string& key, RFFrequency freq, uint16_t pulse_length, uint8_t protocol);
+#endif
     void AddToReplayBuffer(const RFSignal& signal);
     void CheckCaptureMode(const RFSignal& signal);
     std::string Uint32ToHex(uint32_t value, int length);
